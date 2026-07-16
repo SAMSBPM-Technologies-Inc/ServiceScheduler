@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// NOTE: SQLite does not support enums — all enum fields are stored as String.
+// Valid values are enforced at the application layer (Zod validation).
+//
+// PlanType:          FIXED | CONFIGURABLE
+// ScheduleTier:      DAILY | WEEKLY | MONTHLY
+// SelectionRule:     ALL | CHOOSE_ONE | CHOOSE_N
+// SubscriptionStatus: ACTIVE | PAUSED | CANCELLED
+// PaymentStatus:     PENDING | PAID | FAILED | REFUNDED
+// AlertType:         RENEWAL_REMINDER | LOW_STOCK | MISSED_DELIVERY | CUSTOM
+// AlertTrigger:      DAYS_BEFORE_RENEWAL | PRODUCT_OUT_OF_STOCK | MANUAL
+
+model Vendor {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  email        String   @unique
+  passwordHash String
+  logoUrl      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  products      Product[]
+  plans         Plan[]
+  subscriptions Subscription[]
+  alerts        Alert[]
+  alertRules    AlertRule[]
+}
+
+model Customer {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  subscriptions Subscription[]
+  payments      Payment[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  vendorId    String
+  code        String
+  name        String
+  category    String
+  subCategory String?
+  weight      String?
+  description String?
+  footnote    String?
+  alertNote   String?
+  price       Decimal  @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vendor                   Vendor                    @relation(fields: [vendorId], references: [id])
+  productGroupItems        ProductGroupItem[]
+  configurablePlanProducts ConfigurablePlanProduct[]
+
+  @@unique([vendorId, code])
+  @@index([vendorId])
+}
+
+model Plan {
+  id          String   @id @default(cuid())
+  vendorId    String
+  name        String
+  description String?
+  planType    String   // FIXED | CONFIGURABLE
+  active      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vendor               Vendor                    @relation(fields: [vendorId], references: [id])
+  scheduleTiers        PlanScheduleTier[]
+  configurableProducts ConfigurablePlanProduct[]
+  subscriptions        Subscription[]
+
+  @@index([vendorId])
+}
+
+model PlanScheduleTier {
+  id      String  @id @default(cuid())
+  planId  String
+  tier    String  // DAILY | WEEKLY | MONTHLY
+  price   Decimal
+
+  plan          Plan           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  productGroups ProductGroup[]
+
+  @@unique([planId, tier])
+}
+
+model ProductGroup {
+  id                 String  @id @default(cuid())
+  planScheduleTierId String
+  name               String
+  selectionRule      String  // ALL | CHOOSE_ONE | CHOOSE_N
+  chooseN            Int?
+  sortOrder          Int     @default(0)
+
+  planScheduleTier       PlanScheduleTier        @relation(fields: [planScheduleTierId], references: [id], onDelete: Cascade)
+  items                  ProductGroupItem[]
+  subscriptionSelections SubscriptionSelection[]
+}
+
+model ProductGroupItem {
+  id             String @id @default(cuid())
+  productGroupId String
+  productId      String
+  sortOrder      Int    @default(0)
+
+  productGroup ProductGroup @relation(fields: [productGroupId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@unique([productGroupId, productId])
+}
+
+model ConfigurablePlanProduct {
+  id           String @id @default(cuid())
+  planId       String
+  productId    String
+  allowedTiers String // JSON array, e.g. '["DAILY","WEEKLY"]'
+  pricePerTier String @default("{}") // JSON object, e.g. '{"DAILY":10}'
+
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([planId, productId])
+}
+
+model Subscription {
+  id           String   @id @default(cuid())
+  customerId   String
+  planId       String
+  vendorId     String
+  status       String   @default("ACTIVE") // ACTIVE | PAUSED | CANCELLED
+  startDate    DateTime @default(now())
+  endDate      DateTime?
+  selectedTier String?  // DAILY | WEEKLY | MONTHLY (for FIXED plans)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer      Customer                   @relation(fields: [customerId], references: [id])
+  plan          Plan                       @relation(fields: [planId], references: [id])
+  vendor        Vendor                     @relation(fields: [vendorId], references: [id])
+  selections    SubscriptionSelection[]
+  taskSchedules SubscriptionTaskSchedule[]
+  instructions  Instruction[]
+  payments      Payment[]
+  alerts        Alert[]
+
+  @@index([vendorId])
+  @@index([customerId])
+}
+
+model SubscriptionSelection {
+  id             String @id @default(cuid())
+  subscriptionId String
+  productGroupId String
+  productId      String
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  productGroup ProductGroup @relation(fields: [productGroupId], references: [id])
+
+  @@unique([subscriptionId, productGroupId, productId])
+}
+
+model SubscriptionTaskSchedule {
+  id             String  @id @default(cuid())
+  subscriptionId String
+  productId      String
+  tier           String  // DAILY | WEEKLY | MONTHLY
+  price          Decimal
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, productId])
+}
+
+model Instruction {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  text           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id                      String   @id @default(cuid())
+  subscriptionId          String
+  customerId              String
+  vendorId                String
+  amount                  Decimal
+  currency                String   @default("usd")
+  billingPeriod           String
+  status                  String   @default("PENDING") // PENDING | PAID | FAILED | REFUNDED
+  stripePaymentIntentId   String?
+  stripeCheckoutSessionId String?
+  paidAt                  DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  customer     Customer     @relation(fields: [customerId], references: [id])
+
+  @@index([vendorId])
+  @@index([subscriptionId])
+  @@index([customerId])
+}
+
+model Alert {
+  id             String   @id @default(cuid())
+  vendorId       String
+  subscriptionId String?
+  productId      String?
+  type           String   // RENEWAL_REMINDER | LOW_STOCK | MISSED_DELIVERY | CUSTOM
+  message        String
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  vendor       Vendor        @relation(fields: [vendorId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@index([vendorId])
+}
+
+model AlertRule {
+  id         String   @id @default(cuid())
+  vendorId   String
+  name       String
+  trigger    String   // DAYS_BEFORE_RENEWAL | PRODUCT_OUT_OF_STOCK | MANUAL
+  daysOffset Int?
+  productId  String?
+  message    String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@index([vendorId])
+}

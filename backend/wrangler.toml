@@ -1,0 +1,10 @@
+name = "service-scheduler-backend"
+compatibility_date = "2024-01-01"
+
+# D1 Database binding
+# Used when deploying backend as a Cloudflare Worker.
+# For local Express dev, DATABASE_URL="file:./dev.db" is used instead.
+[[d1_databases]]
+binding = "DB"
+database_name = "service_scheduler"
+database_id = "d1d97d5b-3d9f-445f-a277-fe3037a82a60"
