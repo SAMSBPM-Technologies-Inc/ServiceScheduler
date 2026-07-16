@@ -1,68 +1,39 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { config } from '../config';
+import { createMiddleware } from 'hono/factory'
+import { verifyToken, signToken } from '../lib/jwt'
+import type { AppType, VendorPayload, CustomerPayload } from '../types'
 
-export interface VendorPayload {
-  type: 'vendor';
-  vendorId: string;
-  email: string;
-}
-
-export interface CustomerPayload {
-  type: 'customer';
-  customerId: string;
-  email: string;
-}
-
-declare global {
-  namespace Express {
-    interface Request {
-      vendor?: VendorPayload;
-      customer?: CustomerPayload;
-    }
-  }
-}
-
-export function requireVendor(req: Request, res: Response, next: NextFunction) {
-  const token = extractToken(req);
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+export const requireVendor = createMiddleware<AppType>(async (c, next) => {
+  const auth = c.req.header('Authorization')
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
+  if (!token) return c.json({ error: 'Unauthorized' }, 401)
   try {
-    const payload = jwt.verify(token, config.jwtVendorSecret) as VendorPayload;
-    if (payload.type !== 'vendor') return res.status(401).json({ error: 'Unauthorized' });
-    req.vendor = payload;
-    next();
+    const payload = await verifyToken(token, c.env.JWT_VENDOR_SECRET)
+    if (payload.type !== 'vendor') return c.json({ error: 'Unauthorized' }, 401)
+    c.set('vendor', payload as unknown as VendorPayload)
+    await next()
   } catch {
-    res.status(401).json({ error: 'Invalid token' });
+    return c.json({ error: 'Invalid token' }, 401)
   }
-}
+})
 
-export function requireCustomer(req: Request, res: Response, next: NextFunction) {
-  const token = extractToken(req);
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+export const requireCustomer = createMiddleware<AppType>(async (c, next) => {
+  const auth = c.req.header('Authorization')
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
+  if (!token) return c.json({ error: 'Unauthorized' }, 401)
   try {
-    const payload = jwt.verify(token, config.jwtCustomerSecret) as CustomerPayload;
-    if (payload.type !== 'customer') return res.status(401).json({ error: 'Unauthorized' });
-    req.customer = payload;
-    next();
+    const payload = await verifyToken(token, c.env.JWT_CUSTOMER_SECRET)
+    if (payload.type !== 'customer') return c.json({ error: 'Unauthorized' }, 401)
+    c.set('customer', payload as unknown as CustomerPayload)
+    await next()
   } catch {
-    res.status(401).json({ error: 'Invalid token' });
+    return c.json({ error: 'Invalid token' }, 401)
   }
+})
+
+export async function signVendorToken(payload: Omit<VendorPayload, 'type'>, secret: string): Promise<string> {
+  return signToken({ ...payload, type: 'vendor' }, secret)
 }
 
-function extractToken(req: Request): string | null {
-  const auth = req.headers.authorization;
-  if (auth?.startsWith('Bearer ')) return auth.slice(7);
-  return null;
-}
-
-export function signVendorToken(payload: Omit<VendorPayload, 'type'>): string {
-  return jwt.sign({ ...payload, type: 'vendor' }, config.jwtVendorSecret, {
-    expiresIn: config.jwtExpiresIn,
-  } as jwt.SignOptions);
-}
-
-export function signCustomerToken(payload: Omit<CustomerPayload, 'type'>): string {
-  return jwt.sign({ ...payload, type: 'customer' }, config.jwtCustomerSecret, {
-    expiresIn: config.jwtExpiresIn,
-  } as jwt.SignOptions);
+export async function signCustomerToken(payload: Omit<CustomerPayload, 'type'>, secret: string): Promise<string> {
+  return signToken({ ...payload, type: 'customer' }, secret)
 }

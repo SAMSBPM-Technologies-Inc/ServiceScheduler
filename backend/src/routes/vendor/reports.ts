@@ -1,17 +1,19 @@
-import { Router } from 'express';
-import { prisma } from '../../lib/prisma';
-import { requireVendor } from '../../middleware/auth';
+import { Hono } from 'hono'
+import { getPrisma } from '../../lib/db'
+import { requireVendor } from '../../middleware/auth'
+import type { AppType } from '../../types'
 
-const router = Router();
-router.use(requireVendor);
+const app = new Hono<AppType>()
+app.use('*', requireVendor)
 
-router.get('/dashboard', async (req, res) => {
+app.get('/dashboard', async (c) => {
   try {
-    const vendorId = req.vendor!.vendorId;
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const vendorId = c.get('vendor').vendorId
+    const now = new Date()
+    const thirtyDaysAgo = new Date(now)
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
+    const prisma = getPrisma(c.env.DB)
     const [
       activeCount,
       pausedCount,
@@ -42,67 +44,72 @@ router.get('/dashboard', async (req, res) => {
         orderBy: { startDate: 'asc' },
         take: 10,
       }),
-    ]);
+    ])
 
     // Enrich plan counts with plan names
-    const planIds = planCounts.map((p) => p.planId);
-    const plans = await prisma.plan.findMany({ where: { id: { in: planIds } }, select: { id: true, name: true } });
-    const planMap = Object.fromEntries(plans.map((p) => [p.id, p.name]));
+    const planIds = planCounts.map((p) => p.planId)
+    const plans = await prisma.plan.findMany({ where: { id: { in: planIds } }, select: { id: true, name: true } })
+    const planMap = Object.fromEntries(plans.map((p) => [p.id, p.name]))
 
-    res.json({
+    return c.json({
       subscriptions: { active: activeCount, paused: pausedCount, cancelled: cancelledCount },
       totalRevenue: revenueResult._sum.amount || 0,
       topPlans: planCounts.map((pc) => ({ planId: pc.planId, name: planMap[pc.planId], count: pc._count })).sort((a, b) => b.count - a.count),
       recentPayments,
       upcomingRenewals,
-    });
+    })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.get('/revenue', async (req, res) => {
+app.get('/revenue', async (c) => {
   try {
-    const vendorId = req.vendor!.vendorId;
-    const { period = '30d' } = req.query;
-    const days = period === '90d' ? 90 : period === '7d' ? 7 : 30;
-    const since = new Date();
-    since.setDate(since.getDate() - days);
+    const vendorId = c.get('vendor').vendorId
+    const { period = '30d' } = c.req.query()
+    const days = period === '90d' ? 90 : period === '7d' ? 7 : 30
+    const since = new Date()
+    since.setDate(since.getDate() - days)
 
+    const prisma = getPrisma(c.env.DB)
     const payments = await prisma.payment.findMany({
       where: { vendorId, status: 'PAID', paidAt: { gte: since } },
       orderBy: { paidAt: 'asc' },
-    });
+    })
 
     // Group by day
-    const byDay: Record<string, number> = {};
+    const byDay: Record<string, number> = {}
     for (const p of payments) {
-      const day = p.paidAt!.toISOString().slice(0, 10);
-      byDay[day] = (byDay[day] || 0) + Number(p.amount);
+      const day = p.paidAt!.toISOString().slice(0, 10)
+      byDay[day] = (byDay[day] || 0) + Number(p.amount)
     }
-    res.json({ revenue: Object.entries(byDay).map(([date, amount]) => ({ date, amount })) });
+    return c.json({ revenue: Object.entries(byDay).map(([date, amount]) => ({ date, amount })) })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.get('/export/subscriptions', async (req, res) => {
+app.get('/export/subscriptions', async (c) => {
   try {
-    const vendorId = req.vendor!.vendorId;
+    const vendorId = c.get('vendor').vendorId
+    const prisma = getPrisma(c.env.DB)
     const subscriptions = await prisma.subscription.findMany({
       where: { vendorId },
       include: { customer: true, plan: true },
-    });
+    })
     const csv = [
       'ID,Customer,Email,Plan,Status,Start Date',
       ...subscriptions.map((s) => `${s.id},${s.customer.name},${s.customer.email},${s.plan.name},${s.status},${s.startDate.toISOString().slice(0, 10)}`),
-    ].join('\n');
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=subscriptions.csv');
-    res.send(csv);
+    ].join('\n')
+    return new Response(csv, {
+      headers: {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': 'attachment; filename=subscriptions.csv',
+      },
+    })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-export default router;
+export default app

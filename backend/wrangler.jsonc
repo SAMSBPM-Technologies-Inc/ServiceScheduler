@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "service-scheduler-api",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    { "pattern": "api.servstack.ca/*", "zone_name": "servstack.ca" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "service_scheduler",
+      "database_id": "d1d97d5b-3d9f-445f-a277-fe3037a82a60"
+    }
+  ],
+  "vars": {
+    "FRONTEND_URL": "https://servstack.ca"
+  }
+}

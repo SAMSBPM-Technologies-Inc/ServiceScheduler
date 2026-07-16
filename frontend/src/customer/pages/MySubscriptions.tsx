@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { customerApi } from '../../lib/api'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { usePortalPath } from '../../lib/VendorContext'
 
 export default function MySubscriptions() {
-  const { slug } = useParams()
+  const portalPath = usePortalPath()
   const navigate = useNavigate()
   const qc = useQueryClient()
 
@@ -25,7 +26,7 @@ export default function MySubscriptions() {
       {subscriptions?.length === 0 && (
         <div className="text-center py-12 text-gray-400">
           <p>No subscriptions yet.</p>
-          <button onClick={() => navigate(`/portal/${slug}/plans`)} className="btn-primary mt-4">Browse Plans</button>
+          <button onClick={() => navigate(portalPath('/plans'))} className="btn-primary mt-4">Browse Plans</button>
         </div>
       )}
       <div className="space-y-4">
@@ -44,7 +45,7 @@ export default function MySubscriptions() {
                 )}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => navigate(`/portal/${slug}/subscriptions/${s.id}`)} className="btn-secondary text-xs">Details</button>
+                <button onClick={() => navigate(portalPath(`/subscriptions/${s.id}`))} className="btn-secondary text-xs">Details</button>
                 {s.status === 'ACTIVE' && (
                   <button onClick={() => updateStatus.mutate({ id: s.id, status: 'PAUSED' })} className="btn-secondary text-xs">Pause</button>
                 )}

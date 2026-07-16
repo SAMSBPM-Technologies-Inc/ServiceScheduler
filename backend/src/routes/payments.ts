@@ -1,29 +1,32 @@
-import { Router, Request, Response } from 'express';
-import { z } from 'zod';
-import Stripe from 'stripe';
-import { prisma } from '../lib/prisma';
-import { requireCustomer } from '../middleware/auth';
-import { config } from '../config';
-import { validate } from '../middleware/validate';
+import { Hono } from 'hono'
+import { z } from 'zod'
+import Stripe from 'stripe'
+import { getPrisma } from '../lib/db'
+import { requireCustomer } from '../middleware/auth'
+import type { AppType } from '../types'
 
-const router = Router();
-const stripe = new Stripe(config.stripeSecretKey, { apiVersion: '2023-10-16' });
+const app = new Hono<AppType>()
 
 const createCheckoutSchema = z.object({
   paymentId: z.string(),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
-});
+})
 
-router.post('/checkout', requireCustomer, validate(createCheckoutSchema), async (req: Request, res: Response) => {
+app.post('/checkout', requireCustomer, async (c) => {
   try {
-    const { paymentId, successUrl, cancelUrl } = req.body;
+    const body = await c.req.json()
+    const parsed = createCheckoutSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
+    const { paymentId, successUrl, cancelUrl } = parsed.data
+    const prisma = getPrisma(c.env.DB)
     const payment = await prisma.payment.findFirst({
-      where: { id: paymentId, customerId: req.customer!.customerId, status: 'PENDING' },
+      where: { id: paymentId, customerId: c.get('customer').customerId, status: 'PENDING' },
       include: { subscription: { include: { plan: true, vendor: true } } },
-    });
-    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    })
+    if (!payment) return c.json({ error: 'Payment not found' }, 404)
 
+    const stripe = new Stripe(c.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' })
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -38,51 +41,55 @@ router.post('/checkout', requireCustomer, validate(createCheckoutSchema), async 
       success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl,
       metadata: { paymentId: payment.id },
-    });
+    })
 
-    await prisma.payment.update({ where: { id: paymentId }, data: { stripeCheckoutSessionId: session.id } });
-    res.json({ url: session.url });
+    await prisma.payment.update({ where: { id: paymentId }, data: { stripeCheckoutSessionId: session.id } })
+    return c.json({ url: session.url })
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error(err)
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.post('/webhook', async (req: Request, res: Response) => {
-  const sig = req.headers['stripe-signature'];
-  if (!sig) return res.status(400).json({ error: 'No signature' });
-  let event: Stripe.Event;
+app.post('/webhook', async (c) => {
+  const rawBody = await c.req.text()
+  const sig = c.req.header('stripe-signature')
+  if (!sig) return c.json({ error: 'No signature' }, 400)
+  const stripe = new Stripe(c.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' })
+  let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, config.stripeWebhookSecret);
+    event = stripe.webhooks.constructEvent(rawBody, sig, c.env.STRIPE_WEBHOOK_SECRET)
   } catch (err) {
-    return res.status(400).json({ error: 'Webhook signature verification failed' });
+    return c.json({ error: 'Webhook signature verification failed' }, 400)
   }
 
   if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as Stripe.CheckoutSession;
-    const paymentId = session.metadata?.paymentId;
+    const session = event.data.object as Stripe.CheckoutSession
+    const paymentId = session.metadata?.paymentId
     if (paymentId) {
+      const prisma = getPrisma(c.env.DB)
       await prisma.payment.update({
         where: { id: paymentId },
         data: { status: 'PAID', paidAt: new Date(), stripePaymentIntentId: session.payment_intent as string },
-      });
+      })
     }
   }
 
-  res.json({ received: true });
-});
+  return c.json({ received: true })
+})
 
-router.get('/history', requireCustomer, async (req: Request, res: Response) => {
+app.get('/history', requireCustomer, async (c) => {
   try {
+    const prisma = getPrisma(c.env.DB)
     const payments = await prisma.payment.findMany({
-      where: { customerId: req.customer!.customerId },
+      where: { customerId: c.get('customer').customerId },
       include: { subscription: { include: { plan: { select: { name: true } }, vendor: { select: { name: true } } } } },
       orderBy: { createdAt: 'desc' },
-    });
-    res.json({ payments });
+    })
+    return c.json({ payments })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-export default router;
+export default app

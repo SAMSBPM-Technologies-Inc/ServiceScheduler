@@ -1,11 +1,11 @@
-import { Router } from 'express';
-import { z } from 'zod';
-import { prisma } from '../../lib/prisma';
-import { requireVendor } from '../../middleware/auth';
-import { validate } from '../../middleware/validate';
+import { Hono } from 'hono'
+import { z } from 'zod'
+import { getPrisma } from '../../lib/db'
+import { requireVendor } from '../../middleware/auth'
+import type { AppType } from '../../types'
 
-const router = Router();
-router.use(requireVendor);
+const app = new Hono<AppType>()
+app.use('*', requireVendor)
 
 const productSchema = z.object({
   code: z.string().min(1),
@@ -18,72 +18,83 @@ const productSchema = z.object({
   alertNote: z.string().optional(),
   price: z.coerce.number().min(0).default(0),
   active: z.boolean().default(true),
-});
+})
 
-router.get('/', async (req, res) => {
+app.get('/', async (c) => {
   try {
-    const { category, search, active } = req.query;
-    const where: any = { vendorId: req.vendor!.vendorId };
-    if (category) where.category = category;
-    if (active !== undefined) where.active = active === 'true';
+    const { category, search, active } = c.req.query()
+    const where: any = { vendorId: c.get('vendor').vendorId }
+    if (category) where.category = category
+    if (active !== undefined) where.active = active === 'true'
     if (search) where.OR = [
-      { name: { contains: search as string } },
-      { code: { contains: search as string } },
-    ];
-    const products = await prisma.product.findMany({ where, orderBy: [{ category: 'asc' }, { name: 'asc' }] });
-    res.json({ products });
+      { name: { contains: search } },
+      { code: { contains: search } },
+    ]
+    const prisma = getPrisma(c.env.DB)
+    const products = await prisma.product.findMany({ where, orderBy: [{ category: 'asc' }, { name: 'asc' }] })
+    return c.json({ products })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.post('/', validate(productSchema), async (req, res) => {
+app.post('/', async (c) => {
   try {
-    const vendorId = req.vendor!.vendorId;
-    const existing = await prisma.product.findUnique({ where: { vendorId_code: { vendorId, code: req.body.code } } });
-    if (existing) return res.status(409).json({ error: 'Product code already exists' });
-    const product = await prisma.product.create({ data: { ...req.body, vendorId } });
-    res.status(201).json({ product });
+    const body = await c.req.json()
+    const parsed = productSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
+    const vendorId = c.get('vendor').vendorId
+    const prisma = getPrisma(c.env.DB)
+    const existing = await prisma.product.findUnique({ where: { vendorId_code: { vendorId, code: parsed.data.code } } })
+    if (existing) return c.json({ error: 'Product code already exists' }, 409)
+    const product = await prisma.product.create({ data: { ...parsed.data, vendorId } })
+    return c.json({ product }, 201)
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.get('/:id', async (req, res) => {
+app.get('/:id', async (c) => {
   try {
-    const product = await prisma.product.findFirst({ where: { id: req.params.id, vendorId: req.vendor!.vendorId } });
-    if (!product) return res.status(404).json({ error: 'Not found' });
-    res.json({ product });
+    const prisma = getPrisma(c.env.DB)
+    const product = await prisma.product.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })
+    if (!product) return c.json({ error: 'Not found' }, 404)
+    return c.json({ product })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.put('/:id', validate(productSchema.partial()), async (req, res) => {
+app.put('/:id', async (c) => {
   try {
-    const vendorId = req.vendor!.vendorId;
-    const existing = await prisma.product.findFirst({ where: { id: req.params.id, vendorId } });
-    if (!existing) return res.status(404).json({ error: 'Not found' });
-    if (req.body.code && req.body.code !== existing.code) {
-      const codeConflict = await prisma.product.findUnique({ where: { vendorId_code: { vendorId, code: req.body.code } } });
-      if (codeConflict) return res.status(409).json({ error: 'Product code already exists' });
+    const body = await c.req.json()
+    const parsed = productSchema.partial().safeParse(body)
+    if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
+    const vendorId = c.get('vendor').vendorId
+    const prisma = getPrisma(c.env.DB)
+    const existing = await prisma.product.findFirst({ where: { id: c.req.param('id'), vendorId } })
+    if (!existing) return c.json({ error: 'Not found' }, 404)
+    if (parsed.data.code && parsed.data.code !== existing.code) {
+      const codeConflict = await prisma.product.findUnique({ where: { vendorId_code: { vendorId, code: parsed.data.code } } })
+      if (codeConflict) return c.json({ error: 'Product code already exists' }, 409)
     }
-    const product = await prisma.product.update({ where: { id: req.params.id }, data: req.body });
-    res.json({ product });
+    const product = await prisma.product.update({ where: { id: c.req.param('id') }, data: parsed.data })
+    return c.json({ product })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.delete('/:id', async (req, res) => {
+app.delete('/:id', async (c) => {
   try {
-    const existing = await prisma.product.findFirst({ where: { id: req.params.id, vendorId: req.vendor!.vendorId } });
-    if (!existing) return res.status(404).json({ error: 'Not found' });
-    await prisma.product.update({ where: { id: req.params.id }, data: { active: false } });
-    res.json({ message: 'Product archived' });
+    const prisma = getPrisma(c.env.DB)
+    const existing = await prisma.product.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })
+    if (!existing) return c.json({ error: 'Not found' }, 404)
+    await prisma.product.update({ where: { id: c.req.param('id') }, data: { active: false } })
+    return c.json({ message: 'Product archived' })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-export default router;
+export default app

@@ -1,60 +1,69 @@
-import { Router } from 'express';
-import bcrypt from 'bcryptjs';
-import { z } from 'zod';
-import { prisma } from '../../lib/prisma';
-import { signCustomerToken, requireCustomer } from '../../middleware/auth';
-import { validate } from '../../middleware/validate';
+import { Hono } from 'hono'
+import bcrypt from 'bcryptjs'
+import { z } from 'zod'
+import { getPrisma } from '../../lib/db'
+import { signCustomerToken, requireCustomer } from '../../middleware/auth'
+import type { AppType } from '../../types'
 
-const router = Router();
+const app = new Hono<AppType>()
 
 const registerSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(8),
   phone: z.string().optional(),
-});
+})
 
-const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
+const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) })
 
-router.post('/register', validate(registerSchema), async (req, res) => {
+app.post('/register', async (c) => {
   try {
-    const { name, email, password, phone } = req.body;
-    const existing = await prisma.customer.findUnique({ where: { email } });
-    if (existing) return res.status(409).json({ error: 'Email already in use' });
-    const passwordHash = await bcrypt.hash(password, 12);
-    const customer = await prisma.customer.create({ data: { name, email, passwordHash, phone } });
-    const token = signCustomerToken({ customerId: customer.id, email: customer.email });
-    res.status(201).json({ token, customer: { id: customer.id, name: customer.name, email: customer.email } });
+    const body = await c.req.json()
+    const parsed = registerSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
+    const { name, email, password, phone } = parsed.data
+    const prisma = getPrisma(c.env.DB)
+    const existing = await prisma.customer.findUnique({ where: { email } })
+    if (existing) return c.json({ error: 'Email already in use' }, 409)
+    const passwordHash = await bcrypt.hash(password, 12)
+    const customer = await prisma.customer.create({ data: { name, email, passwordHash, phone } })
+    const token = await signCustomerToken({ customerId: customer.id, email: customer.email }, c.env.JWT_CUSTOMER_SECRET)
+    return c.json({ token, customer: { id: customer.id, name: customer.name, email: customer.email } }, 201)
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.post('/login', validate(loginSchema), async (req, res) => {
+app.post('/login', async (c) => {
   try {
-    const { email, password } = req.body;
-    const customer = await prisma.customer.findUnique({ where: { email } });
+    const body = await c.req.json()
+    const parsed = loginSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
+    const { email, password } = parsed.data
+    const prisma = getPrisma(c.env.DB)
+    const customer = await prisma.customer.findUnique({ where: { email } })
     if (!customer || !(await bcrypt.compare(password, customer.passwordHash))) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return c.json({ error: 'Invalid credentials' }, 401)
     }
-    const token = signCustomerToken({ customerId: customer.id, email: customer.email });
-    res.json({ token, customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone } });
+    const token = await signCustomerToken({ customerId: customer.id, email: customer.email }, c.env.JWT_CUSTOMER_SECRET)
+    return c.json({ token, customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone } })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.get('/me', requireCustomer, async (req, res) => {
+app.get('/me', requireCustomer, async (c) => {
   try {
+    const prisma = getPrisma(c.env.DB)
     const customer = await prisma.customer.findUnique({
-      where: { id: req.customer!.customerId },
+      where: { id: c.get('customer').customerId },
       select: { id: true, name: true, email: true, phone: true, createdAt: true },
-    });
-    if (!customer) return res.status(404).json({ error: 'Not found' });
-    res.json({ customer });
+    })
+    if (!customer) return c.json({ error: 'Not found' }, 404)
+    return c.json({ customer })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-export default router;
+export default app

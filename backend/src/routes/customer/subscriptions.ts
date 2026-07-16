@@ -1,30 +1,31 @@
-import { Router } from 'express';
-import { z } from 'zod';
-import { prisma } from '../../lib/prisma';
-import { requireCustomer } from '../../middleware/auth';
-import { validate } from '../../middleware/validate';
-import { validatePlanSelection } from '../../services/planSelection';
+import { Hono } from 'hono'
+import { z } from 'zod'
+import { getPrisma } from '../../lib/db'
+import { requireCustomer } from '../../middleware/auth'
+import { validatePlanSelection } from '../../services/planSelection'
+import type { AppType } from '../../types'
 
-const router = Router();
-router.use(requireCustomer);
+const app = new Hono<AppType>()
+app.use('*', requireCustomer)
 
-const scheduleTierEnum = z.enum(['DAILY', 'WEEKLY', 'MONTHLY']);
+const scheduleTierEnum = z.enum(['DAILY', 'WEEKLY', 'MONTHLY'])
 
 const subscribeFixedSchema = z.object({
   planId: z.string(),
   selectedTier: scheduleTierEnum,
   selections: z.array(z.object({ productGroupId: z.string(), productId: z.string() })).default([]),
-});
+})
 
 const subscribeConfigurableSchema = z.object({
   planId: z.string(),
   taskSchedules: z.array(z.object({ productId: z.string(), tier: scheduleTierEnum, price: z.number().min(0) })).min(1),
-});
+})
 
-router.get('/', async (req, res) => {
+app.get('/', async (c) => {
   try {
+    const prisma = getPrisma(c.env.DB)
     const subscriptions = await prisma.subscription.findMany({
-      where: { customerId: req.customer!.customerId },
+      where: { customerId: c.get('customer').customerId },
       include: {
         plan: { select: { id: true, name: true, planType: true } },
         vendor: { select: { id: true, name: true, slug: true } },
@@ -34,37 +35,41 @@ router.get('/', async (req, res) => {
         payments: { orderBy: { createdAt: 'desc' }, take: 5 },
       },
       orderBy: { createdAt: 'desc' },
-    });
-    res.json({ subscriptions });
+    })
+    return c.json({ subscriptions })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.post('/fixed', validate(subscribeFixedSchema), async (req, res) => {
+app.post('/fixed', async (c) => {
   try {
-    const customerId = req.customer!.customerId;
-    const { planId, selectedTier, selections } = req.body;
+    const body = await c.req.json()
+    const parsed = subscribeFixedSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
+    const customerId = c.get('customer').customerId
+    const { planId, selectedTier, selections } = parsed.data
 
+    const prisma = getPrisma(c.env.DB)
     const plan = await prisma.plan.findUnique({
       where: { id: planId },
       include: { scheduleTiers: { include: { productGroups: { include: { items: true } } } } },
-    });
-    if (!plan || !plan.active) return res.status(404).json({ error: 'Plan not found or inactive' });
-    if (plan.planType !== 'FIXED') return res.status(400).json({ error: 'Use /configurable for configurable plans' });
+    })
+    if (!plan || !plan.active) return c.json({ error: 'Plan not found or inactive' }, 404)
+    if (plan.planType !== 'FIXED') return c.json({ error: 'Use /configurable for configurable plans' }, 400)
 
-    const validation = validatePlanSelection(plan, selectedTier, selections);
-    if (!validation.valid) return res.status(400).json({ error: validation.error });
+    const validation = validatePlanSelection(plan, selectedTier, selections)
+    if (!validation.valid) return c.json({ error: validation.error }, 400)
 
-    const tierRecord = plan.scheduleTiers.find((t) => t.tier === selectedTier);
-    if (!tierRecord) return res.status(400).json({ error: 'Invalid tier' });
+    const tierRecord = plan.scheduleTiers.find((t) => t.tier === selectedTier)
+    if (!tierRecord) return c.json({ error: 'Invalid tier' }, 400)
 
     const subscription = await prisma.$transaction(async (tx) => {
       const sub = await tx.subscription.create({
         data: { customerId, planId, vendorId: plan.vendorId, selectedTier, status: 'ACTIVE' },
-      });
+      })
       for (const sel of selections) {
-        await tx.subscriptionSelection.create({ data: { subscriptionId: sub.id, productGroupId: sel.productGroupId, productId: sel.productId } });
+        await tx.subscriptionSelection.create({ data: { subscriptionId: sub.id, productGroupId: sel.productGroupId, productId: sel.productId } })
       }
       // Create a pending payment
       await tx.payment.create({
@@ -73,43 +78,47 @@ router.post('/fixed', validate(subscribeFixedSchema), async (req, res) => {
           amount: tierRecord.price, currency: 'usd',
           billingPeriod: new Date().toISOString().slice(0, 7), status: 'PENDING',
         },
-      });
-      return sub;
-    });
+      })
+      return sub
+    })
 
-    res.status(201).json({ subscription });
+    return c.json({ subscription }, 201)
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error(err)
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.post('/configurable', validate(subscribeConfigurableSchema), async (req, res) => {
+app.post('/configurable', async (c) => {
   try {
-    const customerId = req.customer!.customerId;
-    const { planId, taskSchedules } = req.body;
+    const body = await c.req.json()
+    const parsed = subscribeConfigurableSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
+    const customerId = c.get('customer').customerId
+    const { planId, taskSchedules } = parsed.data
 
+    const prisma = getPrisma(c.env.DB)
     const plan = await prisma.plan.findUnique({
       where: { id: planId },
       include: { configurableProducts: true },
-    });
-    if (!plan || !plan.active) return res.status(404).json({ error: 'Plan not found or inactive' });
-    if (plan.planType !== 'CONFIGURABLE') return res.status(400).json({ error: 'Use /fixed for fixed plans' });
+    })
+    if (!plan || !plan.active) return c.json({ error: 'Plan not found or inactive' }, 404)
+    if (plan.planType !== 'CONFIGURABLE') return c.json({ error: 'Use /fixed for fixed plans' }, 400)
 
     // Validate each task/tier combo is allowed
     for (const ts of taskSchedules) {
-      const cp = plan.configurableProducts.find((p) => p.productId === ts.productId);
-      if (!cp) return res.status(400).json({ error: `Product ${ts.productId} not in plan` });
-      const allowedTiers = (typeof cp.allowedTiers === 'string' ? JSON.parse(cp.allowedTiers) : cp.allowedTiers) as string[];
-      if (!allowedTiers.includes(ts.tier)) return res.status(400).json({ error: `Tier ${ts.tier} not allowed for product ${ts.productId}` });
+      const cp = plan.configurableProducts.find((p) => p.productId === ts.productId)
+      if (!cp) return c.json({ error: `Product ${ts.productId} not in plan` }, 400)
+      const allowedTiers = (typeof cp.allowedTiers === 'string' ? JSON.parse(cp.allowedTiers) : cp.allowedTiers) as string[]
+      if (!allowedTiers.includes(ts.tier)) return c.json({ error: `Tier ${ts.tier} not allowed for product ${ts.productId}` }, 400)
     }
 
-    const totalAmount = taskSchedules.reduce((sum: number, ts: any) => sum + ts.price, 0);
+    const totalAmount = taskSchedules.reduce((sum: number, ts: any) => sum + ts.price, 0)
 
     const subscription = await prisma.$transaction(async (tx) => {
-      const sub = await tx.subscription.create({ data: { customerId, planId, vendorId: plan.vendorId, status: 'ACTIVE' } });
+      const sub = await tx.subscription.create({ data: { customerId, planId, vendorId: plan.vendorId, status: 'ACTIVE' } })
       for (const ts of taskSchedules) {
-        await tx.subscriptionTaskSchedule.create({ data: { subscriptionId: sub.id, productId: ts.productId, tier: ts.tier, price: ts.price } });
+        await tx.subscriptionTaskSchedule.create({ data: { subscriptionId: sub.id, productId: ts.productId, tier: ts.tier, price: ts.price } })
       }
       await tx.payment.create({
         data: {
@@ -117,20 +126,21 @@ router.post('/configurable', validate(subscribeConfigurableSchema), async (req, 
           amount: totalAmount, currency: 'usd',
           billingPeriod: new Date().toISOString().slice(0, 7), status: 'PENDING',
         },
-      });
-      return sub;
-    });
+      })
+      return sub
+    })
 
-    res.status(201).json({ subscription });
+    return c.json({ subscription }, 201)
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.get('/:id', async (req, res) => {
+app.get('/:id', async (c) => {
   try {
+    const prisma = getPrisma(c.env.DB)
     const subscription = await prisma.subscription.findFirst({
-      where: { id: req.params.id, customerId: req.customer!.customerId },
+      where: { id: c.req.param('id'), customerId: c.get('customer').customerId },
       include: {
         plan: { include: { scheduleTiers: { include: { productGroups: { include: { items: { include: { product: true } } } } } }, configurableProducts: { include: { product: true } } } },
         vendor: { select: { id: true, name: true, slug: true } },
@@ -139,41 +149,45 @@ router.get('/:id', async (req, res) => {
         instructions: true,
         payments: { orderBy: { createdAt: 'desc' } },
       },
-    });
-    if (!subscription) return res.status(404).json({ error: 'Not found' });
-    res.json({ subscription });
+    })
+    if (!subscription) return c.json({ error: 'Not found' }, 404)
+    return c.json({ subscription })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.patch('/:id/status', async (req, res) => {
+app.patch('/:id/status', async (c) => {
   try {
-    const { status } = req.body;
-    if (!['ACTIVE', 'PAUSED', 'CANCELLED'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
-    const subscription = await prisma.subscription.findFirst({ where: { id: req.params.id, customerId: req.customer!.customerId } });
-    if (!subscription) return res.status(404).json({ error: 'Not found' });
-    const updated = await prisma.subscription.update({ where: { id: req.params.id }, data: { status, endDate: status === 'CANCELLED' ? new Date() : null } });
-    res.json({ subscription: updated });
+    const body = await c.req.json()
+    const { status } = body
+    if (!['ACTIVE', 'PAUSED', 'CANCELLED'].includes(status)) return c.json({ error: 'Invalid status' }, 400)
+    const prisma = getPrisma(c.env.DB)
+    const subscription = await prisma.subscription.findFirst({ where: { id: c.req.param('id'), customerId: c.get('customer').customerId } })
+    if (!subscription) return c.json({ error: 'Not found' }, 404)
+    const updated = await prisma.subscription.update({ where: { id: c.req.param('id') }, data: { status, endDate: status === 'CANCELLED' ? new Date() : null } })
+    return c.json({ subscription: updated })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
 // Instructions
-router.put('/:id/instructions', async (req, res) => {
+app.put('/:id/instructions', async (c) => {
   try {
-    const { text } = req.body;
-    if (!text) return res.status(400).json({ error: 'text required' });
-    const subscription = await prisma.subscription.findFirst({ where: { id: req.params.id, customerId: req.customer!.customerId } });
-    if (!subscription) return res.status(404).json({ error: 'Not found' });
+    const body = await c.req.json()
+    const { text } = body
+    if (!text) return c.json({ error: 'text required' }, 400)
+    const prisma = getPrisma(c.env.DB)
+    const subscription = await prisma.subscription.findFirst({ where: { id: c.req.param('id'), customerId: c.get('customer').customerId } })
+    if (!subscription) return c.json({ error: 'Not found' }, 404)
     // Upsert: delete all old, create new
-    await prisma.instruction.deleteMany({ where: { subscriptionId: req.params.id } });
-    const instruction = await prisma.instruction.create({ data: { subscriptionId: req.params.id, text } });
-    res.json({ instruction });
+    await prisma.instruction.deleteMany({ where: { subscriptionId: c.req.param('id') } })
+    const instruction = await prisma.instruction.create({ data: { subscriptionId: c.req.param('id'), text } })
+    return c.json({ instruction })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-export default router;
+export default app

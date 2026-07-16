@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { customerApi } from '../../lib/api'
+import { useVendorSlug, usePortalPath } from '../../lib/VendorContext'
 
 export default function SubscribePlan() {
-  const { slug, planId } = useParams()
+  const { planId } = useParams()
+  const slug = useVendorSlug()
+  const portalPath = usePortalPath()
   const navigate = useNavigate()
 
   const { data: plans } = useQuery({
@@ -36,7 +39,7 @@ export default function SubscribePlan() {
         })
       }
     },
-    onSuccess: () => navigate(`/portal/${slug}/subscriptions`),
+    onSuccess: () => navigate(portalPath('/subscriptions')),
     onError: (err: any) => setError(err.response?.data?.error || 'Subscription failed'),
   })
 
@@ -191,7 +194,7 @@ export default function SubscribePlan() {
         <button className="btn-primary" onClick={() => mutation.mutate()} disabled={!canConfirm || mutation.isPending}>
           {mutation.isPending ? 'Subscribing...' : 'Confirm Subscription'}
         </button>
-        <button className="btn-secondary" onClick={() => navigate(`/portal/${slug}/plans`)}>Cancel</button>
+        <button className="btn-secondary" onClick={() => navigate(portalPath('/plans'))}>Cancel</button>
       </div>
     </div>
   )

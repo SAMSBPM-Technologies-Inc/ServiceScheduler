@@ -1,11 +1,11 @@
-import { Router } from 'express';
-import { z } from 'zod';
-import { prisma } from '../../lib/prisma';
-import { requireVendor } from '../../middleware/auth';
-import { validate } from '../../middleware/validate';
+import { Hono } from 'hono'
+import { z } from 'zod'
+import { getPrisma } from '../../lib/db'
+import { requireVendor } from '../../middleware/auth'
+import type { AppType } from '../../types'
 
-const router = Router();
-router.use(requireVendor);
+const app = new Hono<AppType>()
+app.use('*', requireVendor)
 
 const alertRuleSchema = z.object({
   name: z.string().min(1),
@@ -14,86 +14,100 @@ const alertRuleSchema = z.object({
   productId: z.string().optional(),
   message: z.string().min(1),
   active: z.boolean().default(true),
-});
+})
 
 // Alert rules CRUD
-router.get('/rules', async (req, res) => {
+app.get('/rules', async (c) => {
   try {
-    const rules = await prisma.alertRule.findMany({ where: { vendorId: req.vendor!.vendorId }, orderBy: { createdAt: 'desc' } });
-    res.json({ rules });
+    const prisma = getPrisma(c.env.DB)
+    const rules = await prisma.alertRule.findMany({ where: { vendorId: c.get('vendor').vendorId }, orderBy: { createdAt: 'desc' } })
+    return c.json({ rules })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.post('/rules', validate(alertRuleSchema), async (req, res) => {
+app.post('/rules', async (c) => {
   try {
-    const rule = await prisma.alertRule.create({ data: { ...req.body, vendorId: req.vendor!.vendorId } });
-    res.status(201).json({ rule });
+    const body = await c.req.json()
+    const parsed = alertRuleSchema.safeParse(body)
+    if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
+    const prisma = getPrisma(c.env.DB)
+    const rule = await prisma.alertRule.create({ data: { ...parsed.data, vendorId: c.get('vendor').vendorId } })
+    return c.json({ rule }, 201)
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.put('/rules/:id', validate(alertRuleSchema.partial()), async (req, res) => {
+app.put('/rules/:id', async (c) => {
   try {
-    const rule = await prisma.alertRule.findFirst({ where: { id: req.params.id, vendorId: req.vendor!.vendorId } });
-    if (!rule) return res.status(404).json({ error: 'Not found' });
-    const updated = await prisma.alertRule.update({ where: { id: req.params.id }, data: req.body });
-    res.json({ rule: updated });
+    const body = await c.req.json()
+    const parsed = alertRuleSchema.partial().safeParse(body)
+    if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
+    const prisma = getPrisma(c.env.DB)
+    const rule = await prisma.alertRule.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })
+    if (!rule) return c.json({ error: 'Not found' }, 404)
+    const updated = await prisma.alertRule.update({ where: { id: c.req.param('id') }, data: parsed.data })
+    return c.json({ rule: updated })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.delete('/rules/:id', async (req, res) => {
+app.delete('/rules/:id', async (c) => {
   try {
-    const rule = await prisma.alertRule.findFirst({ where: { id: req.params.id, vendorId: req.vendor!.vendorId } });
-    if (!rule) return res.status(404).json({ error: 'Not found' });
-    await prisma.alertRule.delete({ where: { id: req.params.id } });
-    res.json({ message: 'Deleted' });
+    const prisma = getPrisma(c.env.DB)
+    const rule = await prisma.alertRule.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })
+    if (!rule) return c.json({ error: 'Not found' }, 404)
+    await prisma.alertRule.delete({ where: { id: c.req.param('id') } })
+    return c.json({ message: 'Deleted' })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
 // Alert log
-router.get('/', async (req, res) => {
+app.get('/', async (c) => {
   try {
+    const prisma = getPrisma(c.env.DB)
     const alerts = await prisma.alert.findMany({
-      where: { vendorId: req.vendor!.vendorId },
+      where: { vendorId: c.get('vendor').vendorId },
       include: { subscription: { select: { id: true, customer: { select: { name: true } } } } },
       orderBy: { createdAt: 'desc' },
       take: 100,
-    });
-    res.json({ alerts });
+    })
+    return c.json({ alerts })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.patch('/:id/read', async (req, res) => {
+app.patch('/:id/read', async (c) => {
   try {
-    const alert = await prisma.alert.findFirst({ where: { id: req.params.id, vendorId: req.vendor!.vendorId } });
-    if (!alert) return res.status(404).json({ error: 'Not found' });
-    await prisma.alert.update({ where: { id: req.params.id }, data: { read: true } });
-    res.json({ message: 'Marked as read' });
+    const prisma = getPrisma(c.env.DB)
+    const alert = await prisma.alert.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })
+    if (!alert) return c.json({ error: 'Not found' }, 404)
+    await prisma.alert.update({ where: { id: c.req.param('id') }, data: { read: true } })
+    return c.json({ message: 'Marked as read' })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
 // Manual alert creation
-router.post('/', async (req, res) => {
+app.post('/', async (c) => {
   try {
-    const { message, subscriptionId, type } = req.body;
+    const body = await c.req.json()
+    const { message, subscriptionId, type } = body
+    const prisma = getPrisma(c.env.DB)
     const alert = await prisma.alert.create({
-      data: { vendorId: req.vendor!.vendorId, message, subscriptionId, type: type || 'CUSTOM' },
-    });
-    res.status(201).json({ alert });
+      data: { vendorId: c.get('vendor').vendorId, message, subscriptionId, type: type || 'CUSTOM' },
+    })
+    return c.json({ alert }, 201)
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-export default router;
+export default app

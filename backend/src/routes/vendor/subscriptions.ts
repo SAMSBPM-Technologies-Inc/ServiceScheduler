@@ -1,17 +1,19 @@
-import { Router } from 'express';
-import { prisma } from '../../lib/prisma';
-import { requireVendor } from '../../middleware/auth';
+import { Hono } from 'hono'
+import { getPrisma } from '../../lib/db'
+import { requireVendor } from '../../middleware/auth'
+import type { AppType } from '../../types'
 
-const router = Router();
-router.use(requireVendor);
+const app = new Hono<AppType>()
+app.use('*', requireVendor)
 
-router.get('/', async (req, res) => {
+app.get('/', async (c) => {
   try {
-    const { status, planId } = req.query;
-    const where: any = { vendorId: req.vendor!.vendorId };
-    if (status) where.status = status;
-    if (planId) where.planId = planId;
+    const { status, planId } = c.req.query()
+    const where: any = { vendorId: c.get('vendor').vendorId }
+    if (status) where.status = status
+    if (planId) where.planId = planId
 
+    const prisma = getPrisma(c.env.DB)
     const subscriptions = await prisma.subscription.findMany({
       where,
       include: {
@@ -23,17 +25,18 @@ router.get('/', async (req, res) => {
         payments: { orderBy: { createdAt: 'desc' }, take: 5 },
       },
       orderBy: { createdAt: 'desc' },
-    });
-    res.json({ subscriptions });
+    })
+    return c.json({ subscriptions })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-router.get('/:id', async (req, res) => {
+app.get('/:id', async (c) => {
   try {
+    const prisma = getPrisma(c.env.DB)
     const subscription = await prisma.subscription.findFirst({
-      where: { id: req.params.id, vendorId: req.vendor!.vendorId },
+      where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId },
       include: {
         customer: { select: { id: true, name: true, email: true, phone: true } },
         plan: { include: { scheduleTiers: { include: { productGroups: { include: { items: { include: { product: true } } } } } }, configurableProducts: { include: { product: true } } } },
@@ -42,12 +45,12 @@ router.get('/:id', async (req, res) => {
         instructions: true,
         payments: { orderBy: { createdAt: 'desc' } },
       },
-    });
-    if (!subscription) return res.status(404).json({ error: 'Not found' });
-    res.json({ subscription });
+    })
+    if (!subscription) return c.json({ error: 'Not found' }, 404)
+    return c.json({ subscription })
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    return c.json({ error: 'Server error' }, 500)
   }
-});
+})
 
-export default router;
+export default app

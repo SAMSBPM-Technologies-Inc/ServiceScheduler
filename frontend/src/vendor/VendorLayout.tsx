@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { vendorApi } from '../lib/api'
-import { LayoutDashboard, Package, ClipboardList, Users, Bell, BarChart2, LogOut, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, Package, ClipboardList, Users, Bell, BarChart2, Settings, LogOut, ChevronRight } from 'lucide-react'
 
 const nav = [
   { to: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -10,6 +10,7 @@ const nav = [
   { to: 'subscriptions', label: 'Subscriptions', icon: Users },
   { to: 'alerts', label: 'Alerts', icon: Bell },
   { to: 'reports', label: 'Reports', icon: BarChart2 },
+  { to: 'settings', label: 'Settings', icon: Settings },
 ]
 
 export default function VendorLayout() {

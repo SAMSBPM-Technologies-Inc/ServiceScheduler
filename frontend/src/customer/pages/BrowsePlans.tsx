@@ -1,13 +1,16 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { customerApi } from '../../lib/api'
+import { useVendorSlug, usePortalPath } from '../../lib/VendorContext'
 
 export default function BrowsePlans() {
-  const { slug } = useParams()
+  const slug = useVendorSlug()
+  const portalPath = usePortalPath()
   const navigate = useNavigate()
   const { data: plans, isLoading } = useQuery({
     queryKey: ['portal-plans', slug],
     queryFn: () => customerApi.get(`/portal/vendor/${slug}/plans`).then(r => r.data.plans),
+    enabled: !!slug,
   })
 
   if (isLoading) return <p className="text-gray-400">Loading plans...</p>
@@ -27,7 +30,7 @@ export default function BrowsePlans() {
                 </div>
                 {plan.description && <p className="text-gray-500 mt-1">{plan.description}</p>}
               </div>
-              <button className="btn-primary" onClick={() => navigate(`/portal/${slug}/plans/${plan.id}/subscribe`)}>
+              <button className="btn-primary" onClick={() => navigate(portalPath(`/plans/${plan.id}/subscribe`))}>
                 Subscribe
               </button>
             </div>

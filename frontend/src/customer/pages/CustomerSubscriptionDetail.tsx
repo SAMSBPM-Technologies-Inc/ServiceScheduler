@@ -3,9 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { customerApi } from '../../lib/api'
 import { ChevronLeft } from 'lucide-react'
+import { usePortalPath } from '../../lib/VendorContext'
 
 export default function CustomerSubscriptionDetail() {
-  const { slug, subId } = useParams()
+  const { subId } = useParams()
+  const portalPath = usePortalPath()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [instructionText, setInstructionText] = useState('')
@@ -24,7 +26,7 @@ export default function CustomerSubscriptionDetail() {
   const payNow = useMutation({
     mutationFn: (paymentId: string) => customerApi.post('/payments/checkout', {
       paymentId,
-      successUrl: `${window.location.origin}/portal/${slug}/subscriptions/${subId}`,
+      successUrl: `${window.location.origin}${portalPath(`/subscriptions/${subId}`)}`,
       cancelUrl: window.location.href,
     }).then(r => { window.location.href = r.data.url }),
   })
@@ -36,7 +38,7 @@ export default function CustomerSubscriptionDetail() {
 
   return (
     <div className="max-w-2xl">
-      <button onClick={() => navigate(`/portal/${slug}/subscriptions`)} className="flex items-center gap-2 text-sm text-gray-500 mb-6"><ChevronLeft size={16} /> Back</button>
+      <button onClick={() => navigate(portalPath('/subscriptions'))} className="flex items-center gap-2 text-sm text-gray-500 mb-6"><ChevronLeft size={16} /> Back</button>
       <h1 className="text-2xl font-bold mb-6">{sub.plan?.name}</h1>
 
       <div className="grid grid-cols-2 gap-4 mb-6">

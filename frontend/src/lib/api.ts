@@ -1,7 +1,9 @@
 import axios from 'axios'
 
-export const vendorApi = axios.create({ baseURL: '/api' })
-export const customerApi = axios.create({ baseURL: '/api' })
+const API_BASE = import.meta.env.VITE_API_URL ?? ''
+
+export const vendorApi = axios.create({ baseURL: `${API_BASE}/api` })
+export const customerApi = axios.create({ baseURL: `${API_BASE}/api` })
 
 vendorApi.interceptors.request.use((config) => {
   const token = localStorage.getItem('vendor_token')
@@ -31,7 +33,6 @@ customerApi.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('customer_token')
-      // Don't auto-redirect because slug is in URL
     }
     return Promise.reject(err)
   }

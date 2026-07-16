@@ -10,6 +10,7 @@ import Subscriptions from './pages/Subscriptions'
 import SubscriptionDetail from './pages/SubscriptionDetail'
 import Alerts from './pages/Alerts'
 import Reports from './pages/Reports'
+import Settings from './pages/Settings'
 
 function RequireVendorAuth({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('vendor_token')
@@ -37,6 +38,7 @@ export default function VendorApp() {
         <Route path="subscriptions/:id" element={<SubscriptionDetail />} />
         <Route path="alerts" element={<Alerts />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
   )
