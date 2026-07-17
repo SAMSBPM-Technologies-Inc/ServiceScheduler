@@ -48,7 +48,12 @@ app.post('/login', async (c) => {
     const prisma = getPrisma(c.env.DB)
 
     // Check VendorUser (team member) first
-    const vendorUser = await prisma.vendorUser.findUnique({ where: { email } })
+    let vendorUser: any = null
+    try {
+      vendorUser = await prisma.vendorUser.findUnique({ where: { email } })
+    } catch {
+      // VendorUser table might not exist yet during migration; fall through to owner login
+    }
     if (vendorUser) {
       if (!vendorUser.active) return c.json({ error: 'Account is inactive' }, 401)
       if (!(await bcrypt.compare(password, vendorUser.passwordHash))) {

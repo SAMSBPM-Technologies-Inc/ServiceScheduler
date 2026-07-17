@@ -79,6 +79,34 @@ app.get('/', requireVendor, async (c) => {
   }
 })
 
+function buildPlanOps(prisma: any, planId: string, vendorId: string, data: any) {
+  const ops: any[] = [
+    prisma.plan.create({ data: { id: planId, vendorId, name: data.name, description: data.description, planType: data.planType } }),
+  ]
+  if (data.planType === 'FIXED') {
+    for (const st of data.scheduleTiers) {
+      const tierId = crypto.randomUUID()
+      ops.push(prisma.planScheduleTier.create({ data: { id: tierId, planId, tier: st.tier, price: st.price } }))
+      for (const pg of st.productGroups) {
+        const groupId = crypto.randomUUID()
+        ops.push(prisma.productGroup.create({
+          data: { id: groupId, planScheduleTierId: tierId, name: pg.name, selectionRule: pg.selectionRule, chooseN: pg.chooseN, sortOrder: pg.sortOrder },
+        }))
+        for (const item of pg.items) {
+          ops.push(prisma.productGroupItem.create({ data: { id: crypto.randomUUID(), productGroupId: groupId, productId: item.productId, sortOrder: item.sortOrder } }))
+        }
+      }
+    }
+  } else {
+    for (const cp of data.configurableProducts) {
+      ops.push(prisma.configurablePlanProduct.create({
+        data: { id: crypto.randomUUID(), planId, productId: cp.productId, allowedTiers: JSON.stringify(cp.allowedTiers), pricePerTier: JSON.stringify(cp.pricePerTier) },
+      }))
+    }
+  }
+  return ops
+}
+
 app.post('/', requireAdmin, async (c) => {
   try {
     const body = await c.req.json()
@@ -87,39 +115,10 @@ app.post('/', requireAdmin, async (c) => {
     const data = parsed.data
     const vendorId = c.get('vendor').vendorId
     const prisma = getPrisma(c.env.DB)
-
-    const plan = await prisma.$transaction(async (tx) => {
-      const newPlan = await tx.plan.create({ data: { vendorId, name: data.name, description: data.description, planType: data.planType } })
-
-      if (data.planType === 'FIXED') {
-        for (const st of data.scheduleTiers) {
-          const tier = await tx.planScheduleTier.create({ data: { planId: newPlan.id, tier: st.tier, price: st.price } })
-          for (const pg of st.productGroups) {
-            const group = await tx.productGroup.create({
-              data: { planScheduleTierId: tier.id, name: pg.name, selectionRule: pg.selectionRule, chooseN: pg.chooseN, sortOrder: pg.sortOrder },
-            })
-            for (const item of pg.items) {
-              await tx.productGroupItem.create({ data: { productGroupId: group.id, productId: item.productId, sortOrder: item.sortOrder } })
-            }
-          }
-        }
-      } else {
-        for (const cp of data.configurableProducts) {
-          await tx.configurablePlanProduct.create({
-            data: {
-              planId: newPlan.id,
-              productId: cp.productId,
-              allowedTiers: JSON.stringify(cp.allowedTiers),
-              pricePerTier: JSON.stringify(cp.pricePerTier),
-            },
-          })
-        }
-      }
-      return newPlan
-    })
-
+    const planId = crypto.randomUUID()
+    await prisma.$transaction(buildPlanOps(prisma, planId, vendorId, data))
     const fullPlan = await prisma.plan.findUnique({
-      where: { id: plan.id },
+      where: { id: planId },
       include: { scheduleTiers: { include: { productGroups: { include: { items: { include: { product: true } } } } } }, configurableProducts: { include: { product: true } } },
     })
     return c.json({ plan: parsePlan(fullPlan) }, 201)
@@ -157,38 +156,43 @@ app.put('/:id', requireAdmin, async (c) => {
     if (!parsed.success) return c.json({ error: 'Validation error', issues: parsed.error.issues }, 400)
     const data = parsed.data
 
-    const updated = await prisma.$transaction(async (tx) => {
-      await tx.plan.update({ where: { id: plan.id }, data: { name: data.name, description: data.description } })
+    // D1 doesn't support interactive transactions — delete old data then batch-insert new
+    if (data.planType === 'FIXED') {
+      await prisma.planScheduleTier.deleteMany({ where: { planId: plan.id } })
+    } else {
+      await prisma.configurablePlanProduct.deleteMany({ where: { planId: plan.id } })
+    }
 
-      if (data.planType === 'FIXED') {
-        // Delete existing tiers (cascade removes groups and items)
-        await tx.planScheduleTier.deleteMany({ where: { planId: plan.id } })
-        for (const st of data.scheduleTiers) {
-          const tier = await tx.planScheduleTier.create({ data: { planId: plan.id, tier: st.tier, price: st.price } })
-          for (const pg of st.productGroups) {
-            const group = await tx.productGroup.create({
-              data: { planScheduleTierId: tier.id, name: pg.name, selectionRule: pg.selectionRule, chooseN: pg.chooseN, sortOrder: pg.sortOrder },
-            })
-            for (const item of pg.items) {
-              await tx.productGroupItem.create({ data: { productGroupId: group.id, productId: item.productId, sortOrder: item.sortOrder } })
-            }
+    const updateOps: any[] = [
+      prisma.plan.update({ where: { id: plan.id }, data: { name: data.name, description: data.description } }),
+    ]
+    if (data.planType === 'FIXED') {
+      for (const st of data.scheduleTiers) {
+        const tierId = crypto.randomUUID()
+        updateOps.push(prisma.planScheduleTier.create({ data: { id: tierId, planId: plan.id, tier: st.tier, price: st.price } }))
+        for (const pg of st.productGroups) {
+          const groupId = crypto.randomUUID()
+          updateOps.push(prisma.productGroup.create({
+            data: { id: groupId, planScheduleTierId: tierId, name: pg.name, selectionRule: pg.selectionRule, chooseN: pg.chooseN, sortOrder: pg.sortOrder },
+          }))
+          for (const item of pg.items) {
+            updateOps.push(prisma.productGroupItem.create({ data: { id: crypto.randomUUID(), productGroupId: groupId, productId: item.productId, sortOrder: item.sortOrder } }))
           }
         }
-      } else {
-        await tx.configurablePlanProduct.deleteMany({ where: { planId: plan.id } })
-        for (const cp of data.configurableProducts) {
-          await tx.configurablePlanProduct.create({
-            data: { planId: plan.id, productId: cp.productId, allowedTiers: JSON.stringify(cp.allowedTiers), pricePerTier: JSON.stringify(cp.pricePerTier) },
-          })
-        }
       }
+    } else {
+      for (const cp of data.configurableProducts) {
+        updateOps.push(prisma.configurablePlanProduct.create({
+          data: { id: crypto.randomUUID(), planId: plan.id, productId: cp.productId, allowedTiers: JSON.stringify(cp.allowedTiers), pricePerTier: JSON.stringify(cp.pricePerTier) },
+        }))
+      }
+    }
+    await prisma.$transaction(updateOps)
 
-      return tx.plan.findUnique({
-        where: { id: plan.id },
-        include: { scheduleTiers: { include: { productGroups: { include: { items: { include: { product: true } } } } } }, configurableProducts: { include: { product: true } } },
-      })
+    const updated = await prisma.plan.findUnique({
+      where: { id: plan.id },
+      include: { scheduleTiers: { include: { productGroups: { include: { items: { include: { product: true } } } } } }, configurableProducts: { include: { product: true } } },
     })
-
     return c.json({ plan: parsePlan(updated) })
   } catch (err) {
     console.error(err)
