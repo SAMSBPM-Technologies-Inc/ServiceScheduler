@@ -64,24 +64,22 @@ app.post('/fixed', async (c) => {
     const tierRecord = plan.scheduleTiers.find((t) => t.tier === selectedTier)
     if (!tierRecord) return c.json({ error: 'Invalid tier' }, 400)
 
-    const subscription = await prisma.$transaction(async (tx) => {
-      const sub = await tx.subscription.create({
-        data: { customerId, planId, vendorId: plan.vendorId, selectedTier, status: 'ACTIVE' },
-      })
-      for (const sel of selections) {
-        await tx.subscriptionSelection.create({ data: { subscriptionId: sub.id, productGroupId: sel.productGroupId, productId: sel.productId } })
-      }
-      // Create a pending payment
-      await tx.payment.create({
+    const subId = crypto.randomUUID()
+    const ops: any[] = [
+      prisma.subscription.create({ data: { id: subId, customerId, planId, vendorId: plan.vendorId, selectedTier, status: 'ACTIVE' } }),
+      ...selections.map((sel) =>
+        prisma.subscriptionSelection.create({ data: { id: crypto.randomUUID(), subscriptionId: subId, productGroupId: sel.productGroupId, productId: sel.productId } })
+      ),
+      prisma.payment.create({
         data: {
-          subscriptionId: sub.id, customerId, vendorId: plan.vendorId,
+          id: crypto.randomUUID(), subscriptionId: subId, customerId, vendorId: plan.vendorId,
           amount: tierRecord.price, currency: 'usd',
           billingPeriod: new Date().toISOString().slice(0, 7), status: 'PENDING',
         },
-      })
-      return sub
-    })
-
+      }),
+    ]
+    await prisma.$transaction(ops)
+    const subscription = await prisma.subscription.findUnique({ where: { id: subId } })
     return c.json({ subscription }, 201)
   } catch (err) {
     console.error(err)
@@ -115,21 +113,22 @@ app.post('/configurable', async (c) => {
 
     const totalAmount = taskSchedules.reduce((sum: number, ts: any) => sum + ts.price, 0)
 
-    const subscription = await prisma.$transaction(async (tx) => {
-      const sub = await tx.subscription.create({ data: { customerId, planId, vendorId: plan.vendorId, status: 'ACTIVE' } })
-      for (const ts of taskSchedules) {
-        await tx.subscriptionTaskSchedule.create({ data: { subscriptionId: sub.id, productId: ts.productId, tier: ts.tier, price: ts.price } })
-      }
-      await tx.payment.create({
+    const subId = crypto.randomUUID()
+    const ops: any[] = [
+      prisma.subscription.create({ data: { id: subId, customerId, planId, vendorId: plan.vendorId, status: 'ACTIVE' } }),
+      ...taskSchedules.map((ts: any) =>
+        prisma.subscriptionTaskSchedule.create({ data: { id: crypto.randomUUID(), subscriptionId: subId, productId: ts.productId, tier: ts.tier, price: ts.price } })
+      ),
+      prisma.payment.create({
         data: {
-          subscriptionId: sub.id, customerId, vendorId: plan.vendorId,
+          id: crypto.randomUUID(), subscriptionId: subId, customerId, vendorId: plan.vendorId,
           amount: totalAmount, currency: 'usd',
           billingPeriod: new Date().toISOString().slice(0, 7), status: 'PENDING',
         },
-      })
-      return sub
-    })
-
+      }),
+    ]
+    await prisma.$transaction(ops)
+    const subscription = await prisma.subscription.findUnique({ where: { id: subId } })
     return c.json({ subscription }, 201)
   } catch (err) {
     return c.json({ error: 'Server error' }, 500)
