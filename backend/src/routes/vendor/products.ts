@@ -1,11 +1,10 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { getPrisma } from '../../lib/db'
-import { requireVendor } from '../../middleware/auth'
+import { requireVendor, requireAdmin } from '../../middleware/auth'
 import type { AppType } from '../../types'
 
 const app = new Hono<AppType>()
-app.use('*', requireVendor)
 
 const productSchema = z.object({
   code: z.string().min(1),
@@ -20,7 +19,7 @@ const productSchema = z.object({
   active: z.boolean().default(true),
 })
 
-app.get('/', async (c) => {
+app.get('/', requireVendor, async (c) => {
   try {
     const { category, search, active } = c.req.query()
     const where: any = { vendorId: c.get('vendor').vendorId }
@@ -38,7 +37,7 @@ app.get('/', async (c) => {
   }
 })
 
-app.post('/', async (c) => {
+app.post('/', requireAdmin, async (c) => {
   try {
     const body = await c.req.json()
     const parsed = productSchema.safeParse(body)
@@ -54,7 +53,7 @@ app.post('/', async (c) => {
   }
 })
 
-app.get('/:id', async (c) => {
+app.get('/:id', requireVendor, async (c) => {
   try {
     const prisma = getPrisma(c.env.DB)
     const product = await prisma.product.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })
@@ -65,7 +64,7 @@ app.get('/:id', async (c) => {
   }
 })
 
-app.put('/:id', async (c) => {
+app.put('/:id', requireAdmin, async (c) => {
   try {
     const body = await c.req.json()
     const parsed = productSchema.partial().safeParse(body)
@@ -85,7 +84,7 @@ app.put('/:id', async (c) => {
   }
 })
 
-app.delete('/:id', async (c) => {
+app.delete('/:id', requireAdmin, async (c) => {
   try {
     const prisma = getPrisma(c.env.DB)
     const existing = await prisma.product.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })

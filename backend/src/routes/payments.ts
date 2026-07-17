@@ -22,11 +22,13 @@ app.post('/checkout', requireCustomer, async (c) => {
     const prisma = getPrisma(c.env.DB)
     const payment = await prisma.payment.findFirst({
       where: { id: paymentId, customerId: c.get('customer').customerId, status: 'PENDING' },
-      include: { subscription: { include: { plan: true, vendor: true } } },
+      include: { subscription: { include: { plan: true, vendor: { select: { name: true, stripeSecretKey: true } } } } },
     })
     if (!payment) return c.json({ error: 'Payment not found' }, 404)
 
-    const stripe = new Stripe(c.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' })
+    // Use vendor's own Stripe key if configured, else fall back to platform key
+    const stripeKey = payment.subscription.vendor.stripeSecretKey || c.env.STRIPE_SECRET_KEY
+    const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' })
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -51,6 +53,45 @@ app.post('/checkout', requireCustomer, async (c) => {
   }
 })
 
+async function handleWebhookEvent(event: Stripe.Event, db: D1Database) {
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object as Stripe.CheckoutSession
+    const paymentId = session.metadata?.paymentId
+    if (paymentId) {
+      const prisma = getPrisma(db)
+      await prisma.payment.update({
+        where: { id: paymentId },
+        data: { status: 'PAID', paidAt: new Date(), stripePaymentIntentId: session.payment_intent as string },
+      })
+    }
+  }
+}
+
+// Vendor-specific webhook: POST /webhook/:vendorId
+// Vendors configure this full URL in their Stripe dashboard so we know which keys to use
+app.post('/webhook/:vendorId', async (c) => {
+  const rawBody = await c.req.text()
+  const sig = c.req.header('stripe-signature')
+  if (!sig) return c.json({ error: 'No signature' }, 400)
+  const prisma = getPrisma(c.env.DB)
+  const vendor = await prisma.vendor.findUnique({
+    where: { id: c.req.param('vendorId') },
+    select: { stripeSecretKey: true, stripeWebhookSecret: true },
+  })
+  const stripeKey = vendor?.stripeSecretKey || c.env.STRIPE_SECRET_KEY
+  const webhookSecret = vendor?.stripeWebhookSecret || c.env.STRIPE_WEBHOOK_SECRET
+  const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' })
+  let event: Stripe.Event
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
+  } catch (err) {
+    return c.json({ error: 'Webhook signature verification failed' }, 400)
+  }
+  await handleWebhookEvent(event, c.env.DB)
+  return c.json({ received: true })
+})
+
+// Legacy webhook path (uses global platform keys)
 app.post('/webhook', async (c) => {
   const rawBody = await c.req.text()
   const sig = c.req.header('stripe-signature')
@@ -62,19 +103,7 @@ app.post('/webhook', async (c) => {
   } catch (err) {
     return c.json({ error: 'Webhook signature verification failed' }, 400)
   }
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as Stripe.CheckoutSession
-    const paymentId = session.metadata?.paymentId
-    if (paymentId) {
-      const prisma = getPrisma(c.env.DB)
-      await prisma.payment.update({
-        where: { id: paymentId },
-        data: { status: 'PAID', paidAt: new Date(), stripePaymentIntentId: session.payment_intent as string },
-      })
-    }
-  }
-
+  await handleWebhookEvent(event, c.env.DB)
   return c.json({ received: true })
 })
 

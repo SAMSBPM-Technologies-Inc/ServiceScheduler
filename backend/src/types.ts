@@ -9,7 +9,7 @@ export type Env = {
   FRONTEND_URL: string
 }
 
-export type VendorPayload = { type: 'vendor'; vendorId: string; email: string }
+export type VendorPayload = { type: 'vendor'; vendorId: string; email: string; role: 'ADMIN' | 'WORKER'; userId?: string }
 export type CustomerPayload = { type: 'customer'; customerId: string; email: string }
 
 export type Variables = {

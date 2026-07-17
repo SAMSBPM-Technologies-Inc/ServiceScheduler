@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { vendorApi } from '../../lib/api'
 import { useNavigate } from 'react-router-dom'
+import { isAdmin } from '../../lib/useVendorRole'
 import { Plus, ToggleLeft, ToggleRight, ChevronDown, Edit2 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -8,6 +9,7 @@ export default function Plans() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [expanded, setExpanded] = useState<string | null>(null)
+  const admin = isAdmin()
 
   const { data, isLoading } = useQuery({
     queryKey: ['vendor-plans'],
@@ -23,9 +25,11 @@ export default function Plans() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Plans</h1>
-        <button className="btn-primary flex items-center gap-2" onClick={() => navigate('/vendor/plans/new')}>
-          <Plus size={16} /> Create Plan
-        </button>
+        {admin && (
+          <button className="btn-primary flex items-center gap-2" onClick={() => navigate('/vendor/plans/new')}>
+            <Plus size={16} /> Create Plan
+          </button>
+        )}
       </div>
       {isLoading && <p className="text-gray-400">Loading...</p>}
       <div className="space-y-4">
@@ -42,12 +46,16 @@ export default function Plans() {
                 <div className="text-xs text-gray-400 mt-1">{plan._count?.subscriptions || 0} subscriptions</div>
               </div>
               <div className="flex items-center gap-3">
-                <button onClick={() => navigate(`/vendor/plans/${plan.id}/edit`)} className="text-gray-400 hover:text-primary-600" title="Edit plan">
-                  <Edit2 size={16} />
-                </button>
-                <button onClick={() => toggle.mutate(plan.id)} className="text-gray-400 hover:text-primary-600">
-                  {plan.active ? <ToggleRight size={24} className="text-green-500" /> : <ToggleLeft size={24} />}
-                </button>
+                {admin && (
+                  <button onClick={() => navigate(`/vendor/plans/${plan.id}/edit`)} className="text-gray-400 hover:text-primary-600" title="Edit plan">
+                    <Edit2 size={16} />
+                  </button>
+                )}
+                {admin && (
+                  <button onClick={() => toggle.mutate(plan.id)} className="text-gray-400 hover:text-primary-600">
+                    {plan.active ? <ToggleRight size={24} className="text-green-500" /> : <ToggleLeft size={24} />}
+                  </button>
+                )}
                 <button onClick={() => setExpanded(expanded === plan.id ? null : plan.id)} className="text-gray-400 hover:text-gray-700">
                   <ChevronDown size={18} className={`transition-transform ${expanded === plan.id ? 'rotate-180' : ''}`} />
                 </button>

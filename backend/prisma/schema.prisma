@@ -20,21 +20,42 @@ datasource db {
 // AlertTrigger:      DAYS_BEFORE_RENEWAL | PRODUCT_OUT_OF_STOCK | MANUAL
 
 model Vendor {
-  id           String   @id @default(cuid())
-  name         String
-  slug         String   @unique
-  email        String   @unique
-  passwordHash String
-  logoUrl      String?
-  customDomain String?  @unique
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  name                String
+  slug                String   @unique
+  email               String   @unique
+  passwordHash        String
+  logoUrl             String?
+  customDomain        String?  @unique
+  stripeSecretKey     String?
+  stripeWebhookSecret String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   products      Product[]
   plans         Plan[]
   subscriptions Subscription[]
   alerts        Alert[]
   alertRules    AlertRule[]
+  vendorUsers   VendorUser[]
+}
+
+// VendorUser represents team members (ADMIN or WORKER) under a vendor
+// role: ADMIN | WORKER
+model VendorUser {
+  id           String   @id @default(cuid())
+  vendorId     String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   // ADMIN | WORKER
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@index([vendorId])
 }
 
 model Customer {

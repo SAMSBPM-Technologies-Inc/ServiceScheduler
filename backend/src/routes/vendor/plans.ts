@@ -1,11 +1,10 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { getPrisma } from '../../lib/db'
-import { requireVendor } from '../../middleware/auth'
+import { requireVendor, requireAdmin } from '../../middleware/auth'
 import type { AppType } from '../../types'
 
 const app = new Hono<AppType>()
-app.use('*', requireVendor)
 
 // SQLite stores allowedTiers/pricePerTier as JSON strings — parse them before returning
 function parseCp(cp: any) {
@@ -60,7 +59,7 @@ const createPlanSchema = z.discriminatedUnion('planType', [
   }),
 ])
 
-app.get('/', async (c) => {
+app.get('/', requireVendor, async (c) => {
   try {
     const prisma = getPrisma(c.env.DB)
     const plans = await prisma.plan.findMany({
@@ -80,7 +79,7 @@ app.get('/', async (c) => {
   }
 })
 
-app.post('/', async (c) => {
+app.post('/', requireAdmin, async (c) => {
   try {
     const body = await c.req.json()
     const parsed = createPlanSchema.safeParse(body)
@@ -130,7 +129,7 @@ app.post('/', async (c) => {
   }
 })
 
-app.get('/:id', async (c) => {
+app.get('/:id', requireVendor, async (c) => {
   try {
     const prisma = getPrisma(c.env.DB)
     const plan = await prisma.plan.findFirst({
@@ -147,7 +146,7 @@ app.get('/:id', async (c) => {
   }
 })
 
-app.put('/:id', async (c) => {
+app.put('/:id', requireAdmin, async (c) => {
   try {
     const prisma = getPrisma(c.env.DB)
     const plan = await prisma.plan.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })
@@ -197,7 +196,7 @@ app.put('/:id', async (c) => {
   }
 })
 
-app.patch('/:id/activate', async (c) => {
+app.patch('/:id/activate', requireAdmin, async (c) => {
   try {
     const prisma = getPrisma(c.env.DB)
     const plan = await prisma.plan.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })
@@ -209,7 +208,7 @@ app.patch('/:id/activate', async (c) => {
   }
 })
 
-app.delete('/:id', async (c) => {
+app.delete('/:id', requireAdmin, async (c) => {
   try {
     const prisma = getPrisma(c.env.DB)
     const plan = await prisma.plan.findFirst({ where: { id: c.req.param('id'), vendorId: c.get('vendor').vendorId } })

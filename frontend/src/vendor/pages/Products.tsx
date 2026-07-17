@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { vendorApi } from '../../lib/api'
+import { isAdmin } from '../../lib/useVendorRole'
 import { Plus, Search, Edit2, Archive } from 'lucide-react'
 
 interface Product { id: string; code: string; name: string; category: string; subCategory?: string; price: number; active: boolean; description?: string }
@@ -58,6 +59,7 @@ export default function Products() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Product | undefined>()
   const qc = useQueryClient()
+  const admin = isAdmin()
 
   const { data, isLoading } = useQuery({
     queryKey: ['vendor-products', search],
@@ -73,9 +75,11 @@ export default function Products() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Products</h1>
-        <button className="btn-primary flex items-center gap-2" onClick={() => { setEditing(undefined); setShowForm(true) }}>
-          <Plus size={16} /> Add Product
-        </button>
+        {admin && (
+          <button className="btn-primary flex items-center gap-2" onClick={() => { setEditing(undefined); setShowForm(true) }}>
+            <Plus size={16} /> Add Product
+          </button>
+        )}
       </div>
       <div className="card">
         <div className="flex gap-3 mb-4">
@@ -100,8 +104,8 @@ export default function Products() {
                 <td className="py-3">${Number(p.price).toFixed(2)}</td>
                 <td className="py-3">{p.active ? <span className="badge-active">Active</span> : <span className="badge-cancelled">Archived</span>}</td>
                 <td className="py-3 flex gap-2">
-                  <button onClick={() => { setEditing(p); setShowForm(true) }} className="text-gray-400 hover:text-primary-600"><Edit2 size={15} /></button>
-                  <button onClick={() => archive.mutate(p.id)} className="text-gray-400 hover:text-red-500"><Archive size={15} /></button>
+                  {admin && <button onClick={() => { setEditing(p); setShowForm(true) }} className="text-gray-400 hover:text-primary-600"><Edit2 size={15} /></button>}
+                  {admin && <button onClick={() => archive.mutate(p.id)} className="text-gray-400 hover:text-red-500"><Archive size={15} /></button>}
                 </td>
               </tr>
             ))}

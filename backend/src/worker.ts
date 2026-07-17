@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import type { AppType } from './types'
 
 import vendorAuthRouter from './routes/vendor/auth'
+import vendorTeamRouter from './routes/vendor/team'
 import vendorProductsRouter from './routes/vendor/products'
 import vendorPlansRouter from './routes/vendor/plans'
 import vendorSubscriptionsRouter from './routes/vendor/subscriptions'
@@ -18,6 +19,7 @@ const app = new Hono<AppType>()
 app.use('*', cors({ origin: '*', allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] }))
 
 app.route('/api/vendor/auth', vendorAuthRouter)
+app.route('/api/vendor/team', vendorTeamRouter)
 app.route('/api/vendor/products', vendorProductsRouter)
 app.route('/api/vendor/plans', vendorPlansRouter)
 app.route('/api/vendor/subscriptions', vendorSubscriptionsRouter)

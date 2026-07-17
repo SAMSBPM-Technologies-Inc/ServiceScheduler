@@ -15,6 +15,7 @@ export default function VendorLogin() {
     try {
       const { data } = await vendorApi.post('/vendor/auth/login', form)
       localStorage.setItem('vendor_token', data.token)
+      localStorage.setItem('vendor_role', data.role || 'WORKER')
       navigate('/vendor/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed')
