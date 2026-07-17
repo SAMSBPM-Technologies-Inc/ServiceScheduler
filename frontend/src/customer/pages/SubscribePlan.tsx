@@ -35,7 +35,7 @@ export default function SubscribePlan() {
       } else {
         return customerApi.post('/customer/subscriptions/configurable', {
           planId,
-          taskSchedules: Object.entries(taskSchedules).map(([productId, { tier, price }]) => ({ productId, tier, price })),
+          taskSchedules: Object.entries(taskSchedules).map(([productId, { tier }]) => ({ productId, tier })),
         })
       }
     },

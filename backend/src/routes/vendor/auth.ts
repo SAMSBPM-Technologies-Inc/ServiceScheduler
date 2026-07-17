@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { getPrisma } from '../../lib/db'
 import { signVendorToken, requireVendor, requireAdmin } from '../../middleware/auth'
+import { maybeEncrypt } from '../../lib/encryption'
 import type { AppType } from '../../types'
 
 const app = new Hono<AppType>()
@@ -128,8 +129,8 @@ app.put('/stripe', requireAdmin, async (c) => {
     await prisma.vendor.update({
       where: { id: c.get('vendor').vendorId },
       data: {
-        stripeSecretKey: parsed.data.stripeSecretKey || null,
-        stripeWebhookSecret: parsed.data.stripeWebhookSecret || null,
+        stripeSecretKey: await maybeEncrypt(parsed.data.stripeSecretKey || null, c.env.ENCRYPTION_KEY),
+        stripeWebhookSecret: await maybeEncrypt(parsed.data.stripeWebhookSecret || null, c.env.ENCRYPTION_KEY),
       },
     })
     return c.json({ ok: true })

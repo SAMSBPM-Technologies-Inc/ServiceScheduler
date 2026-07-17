@@ -39,6 +39,12 @@ export default function CustomerLayout() {
       <main className="max-w-5xl mx-auto px-6 py-8">
         <Outlet />
       </main>
+      <footer className="border-t mt-8 py-4 text-center text-xs text-gray-400">
+        Built by{' '}
+        <a href="https://samsbpm.ca" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 underline">
+          SAMSBPM Technologies Inc
+        </a>
+      </footer>
     </div>
   )
 }

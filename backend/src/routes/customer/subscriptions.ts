@@ -18,7 +18,7 @@ const subscribeFixedSchema = z.object({
 
 const subscribeConfigurableSchema = z.object({
   planId: z.string(),
-  taskSchedules: z.array(z.object({ productId: z.string(), tier: scheduleTierEnum, price: z.number().min(0) })).min(1),
+  taskSchedules: z.array(z.object({ productId: z.string(), tier: scheduleTierEnum })).min(1),
 })
 
 app.get('/', async (c) => {
@@ -103,20 +103,24 @@ app.post('/configurable', async (c) => {
     if (!plan || !plan.active) return c.json({ error: 'Plan not found or inactive' }, 404)
     if (plan.planType !== 'CONFIGURABLE') return c.json({ error: 'Use /fixed for fixed plans' }, 400)
 
-    // Validate each task/tier combo is allowed
+    // Validate each task/tier combo is allowed and compute prices server-side
+    let totalAmount = 0
+    const schedulesWithPrices: { productId: string; tier: string; price: number }[] = []
     for (const ts of taskSchedules) {
       const cp = plan.configurableProducts.find((p) => p.productId === ts.productId)
       if (!cp) return c.json({ error: `Product ${ts.productId} not in plan` }, 400)
       const allowedTiers = (typeof cp.allowedTiers === 'string' ? JSON.parse(cp.allowedTiers) : cp.allowedTiers) as string[]
       if (!allowedTiers.includes(ts.tier)) return c.json({ error: `Tier ${ts.tier} not allowed for product ${ts.productId}` }, 400)
+      const pricePerTier = (typeof cp.pricePerTier === 'string' ? JSON.parse(cp.pricePerTier) : cp.pricePerTier) as Record<string, number>
+      const price = Number(pricePerTier?.[ts.tier] ?? 0)
+      totalAmount += price
+      schedulesWithPrices.push({ productId: ts.productId, tier: ts.tier, price })
     }
-
-    const totalAmount = taskSchedules.reduce((sum: number, ts: any) => sum + ts.price, 0)
 
     const subId = crypto.randomUUID()
     const ops: any[] = [
       prisma.subscription.create({ data: { id: subId, customerId, planId, vendorId: plan.vendorId, status: 'ACTIVE' } }),
-      ...taskSchedules.map((ts: any) =>
+      ...schedulesWithPrices.map((ts) =>
         prisma.subscriptionTaskSchedule.create({ data: { id: crypto.randomUUID(), subscriptionId: subId, productId: ts.productId, tier: ts.tier, price: ts.price } })
       ),
       prisma.payment.create({

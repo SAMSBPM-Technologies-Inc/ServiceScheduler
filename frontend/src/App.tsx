@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { VendorProvider } from './lib/VendorContext'
 import VendorApp from './vendor/VendorApp'
 import CustomerApp from './customer/CustomerApp'
+import AdminApp from './admin/AdminApp'
 import { customerApi } from './lib/api'
 
 export default function App() {
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/*" element={<CustomerApp />} />
         ) : (
           <>
+            <Route path="/admin/*" element={<AdminApp />} />
             <Route path="/vendor/*" element={<VendorApp />} />
             <Route path="/portal/*" element={<CustomerApp />} />
             <Route path="/" element={<Navigate to="/vendor/login" replace />} />

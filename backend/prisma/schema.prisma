@@ -32,12 +32,13 @@ model Vendor {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  products      Product[]
-  plans         Plan[]
-  subscriptions Subscription[]
-  alerts        Alert[]
-  alertRules    AlertRule[]
-  vendorUsers   VendorUser[]
+  products           Product[]
+  plans              Plan[]
+  subscriptions      Subscription[]
+  alerts             Alert[]
+  alertRules         AlertRule[]
+  vendorUsers        VendorUser[]
+  productCategories  ProductCategory[]
 }
 
 // VendorUser represents team members (ADMIN or WORKER) under a vendor
@@ -276,4 +277,38 @@ model AlertRule {
   vendor Vendor @relation(fields: [vendorId], references: [id])
 
   @@index([vendorId])
+}
+
+model ProductCategory {
+  id        String   @id @default(cuid())
+  vendorId  String
+  name      String
+  sortOrder Int      @default(0)
+
+  vendor        Vendor               @relation(fields: [vendorId], references: [id])
+  subCategories ProductSubCategory[]
+
+  @@unique([vendorId, name])
+  @@index([vendorId])
+}
+
+model ProductSubCategory {
+  id         String @id @default(cuid())
+  categoryId String
+  name       String
+  sortOrder  Int    @default(0)
+
+  category ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, name])
+  @@index([categoryId])
+}
+
+model PlatformAdmin {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

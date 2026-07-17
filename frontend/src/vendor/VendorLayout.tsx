@@ -57,8 +57,16 @@ export default function VendorLayout() {
           <LogOut size={16} /> Logout
         </button>
       </aside>
-      <main className="flex-1 overflow-auto">
-        <Outlet />
+      <main className="flex-1 overflow-auto flex flex-col">
+        <div className="flex-1">
+          <Outlet />
+        </div>
+        <footer className="border-t py-3 px-6 text-xs text-gray-400 text-center">
+          Built by{' '}
+          <a href="https://samsbpm.ca" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 underline">
+            SAMSBPM Technologies Inc
+          </a>
+        </footer>
       </main>
     </div>
   )

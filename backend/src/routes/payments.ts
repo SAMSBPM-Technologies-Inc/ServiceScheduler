@@ -3,6 +3,7 @@ import { z } from 'zod'
 import Stripe from 'stripe'
 import { getPrisma } from '../lib/db'
 import { requireCustomer } from '../middleware/auth'
+import { maybeDecrypt } from '../lib/encryption'
 import type { AppType } from '../types'
 
 const app = new Hono<AppType>()
@@ -27,7 +28,8 @@ app.post('/checkout', requireCustomer, async (c) => {
     if (!payment) return c.json({ error: 'Payment not found' }, 404)
 
     // Use vendor's own Stripe key if configured, else fall back to platform key
-    const stripeKey = payment.subscription.vendor.stripeSecretKey || c.env.STRIPE_SECRET_KEY
+    const vendorStripeKey = await maybeDecrypt(payment.subscription.vendor.stripeSecretKey, c.env.ENCRYPTION_KEY)
+    const stripeKey = vendorStripeKey || c.env.STRIPE_SECRET_KEY
     const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' })
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -78,8 +80,11 @@ app.post('/webhook/:vendorId', async (c) => {
     where: { id: c.req.param('vendorId') },
     select: { stripeSecretKey: true, stripeWebhookSecret: true },
   })
-  const stripeKey = vendor?.stripeSecretKey || c.env.STRIPE_SECRET_KEY
-  const webhookSecret = vendor?.stripeWebhookSecret || c.env.STRIPE_WEBHOOK_SECRET
+  if (!vendor) return c.json({ error: 'Vendor not found' }, 404)
+  const vendorStripeKey = await maybeDecrypt(vendor.stripeSecretKey, c.env.ENCRYPTION_KEY)
+  const vendorWebhookSecret = await maybeDecrypt(vendor.stripeWebhookSecret, c.env.ENCRYPTION_KEY)
+  const stripeKey = vendorStripeKey || c.env.STRIPE_SECRET_KEY
+  const webhookSecret = vendorWebhookSecret || c.env.STRIPE_WEBHOOK_SECRET
   const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' })
   let event: Stripe.Event
   try {
