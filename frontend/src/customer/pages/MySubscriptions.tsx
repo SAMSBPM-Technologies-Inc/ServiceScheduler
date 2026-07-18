@@ -32,9 +32,9 @@ export default function MySubscriptions() {
       <div className="space-y-4">
         {subscriptions?.map((s: any) => (
           <div key={s.id} className="card">
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-semibold">{s.plan?.name}</h3>
                   <span className={`badge-${s.status.toLowerCase()}`}>{s.status}</span>
                 </div>
@@ -44,7 +44,7 @@ export default function MySubscriptions() {
                   <div className="text-xs text-gray-400 mt-1">{s.taskSchedules.length} tasks configured</div>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button onClick={() => navigate(portalPath(`/subscriptions/${s.id}`))} className="btn-secondary text-xs">Details</button>
                 {s.status === 'ACTIVE' && (
                   <button onClick={() => updateStatus.mutate({ id: s.id, status: 'PAUSED' })} className="btn-secondary text-xs">Pause</button>

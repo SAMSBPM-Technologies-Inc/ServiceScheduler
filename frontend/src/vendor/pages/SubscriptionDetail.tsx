@@ -267,14 +267,14 @@ export default function SubscriptionDetail() {
   const isFixed = data.plan?.planType === 'FIXED'
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-4 sm:p-8 max-w-3xl">
       <button onClick={() => navigate('/vendor/subscriptions')} className="flex items-center gap-2 text-sm text-gray-500 mb-6">
         <ChevronLeft size={16} /> Back to Subscriptions
       </button>
 
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Subscription Detail</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {data.status === 'ACTIVE' && (
             <>
               <button
@@ -323,7 +323,7 @@ export default function SubscriptionDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div className="card">
           <h2 className="font-semibold mb-3">Customer</h2>
           <div className="text-sm space-y-1">

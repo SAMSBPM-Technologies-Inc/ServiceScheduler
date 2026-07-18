@@ -54,7 +54,7 @@ function ProductForm({ product, onClose }: { product?: Product; onClose: () => v
             No categories set up yet. Go to the <strong>Categories</strong> tab to add them first.
           </div>
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><label className="label">Code *</label><input className="input" value={form.code} onChange={set('code')} required /></div>
           <div><label className="label">Name *</label><input className="input" value={form.name} onChange={set('name')} required /></div>
           <div>
@@ -328,7 +328,8 @@ function ProductsTab() {
       </div>
 
       {isLoading && <p className="text-gray-400">Loading...</p>}
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto -mx-1">
+      <table className="w-full text-sm min-w-[600px]">
         <thead><tr className="border-b text-gray-500 text-left">
           <th className="pb-2 font-medium">Code</th>
           <th className="pb-2 font-medium">Name</th>
@@ -357,6 +358,7 @@ function ProductsTab() {
           ))}
         </tbody>
       </table>
+      </div>
       {data?.length === 0 && <p className="text-center text-gray-400 py-8">No products yet.</p>}
       {showForm && <ProductForm product={editing} onClose={() => { setShowForm(false); setEditing(undefined) }} />}
     </div>
@@ -371,7 +373,7 @@ export default function Products() {
   const [tab, setTab] = useState<Tab>('products')
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <h1 className="text-2xl font-bold mb-6">Products</h1>
 
       <div className="border-b mb-6">

@@ -31,7 +31,7 @@ export default function Vendors() {
               <div className="text-sm text-gray-500 truncate">{v.email}</div>
               {v.customDomain && <div className="text-xs text-primary-600 mt-0.5">{v.customDomain}</div>}
             </div>
-            <div className="flex items-center gap-5 text-sm text-gray-500 flex-shrink-0">
+            <div className="hidden sm:flex items-center gap-5 text-sm text-gray-500 flex-shrink-0">
               <div className="flex items-center gap-1.5"><BookOpen size={14} />{v._count.plans} plans</div>
               <div className="flex items-center gap-1.5"><Users size={14} />{v._count.vendorUsers} team</div>
               <div className="flex items-center gap-1.5"><Building2 size={14} />{v._count.subscriptions} subs</div>

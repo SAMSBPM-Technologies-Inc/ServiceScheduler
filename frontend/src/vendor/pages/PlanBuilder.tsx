@@ -82,7 +82,7 @@ function FixedPlanBuilder({ products, initialPlan, planId }: { products: any[]; 
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label">Plan Name *</label><input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Veg Meal Plan" /></div>
         <div><label className="label">Description</label><input className="input" value={description} onChange={e => setDescription(e.target.value)} /></div>
       </div>
@@ -94,7 +94,7 @@ function FixedPlanBuilder({ products, initialPlan, planId }: { products: any[]; 
         </div>
         {tiers.map((tier, ti) => (
           <div key={ti} className="border border-gray-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex flex-wrap items-center gap-3 mb-4">
               <select className="input w-36" value={tier.tier} onChange={e => updateTier(ti, { tier: e.target.value as ScheduleTier })}>
                 {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -112,9 +112,9 @@ function FixedPlanBuilder({ products, initialPlan, planId }: { products: any[]; 
               </div>
               {tier.productGroups.map((group, gi) => (
                 <div key={gi} className="border border-gray-100 rounded p-3 mb-2 bg-gray-50">
-                  <div className="flex gap-3 mb-2">
-                    <input className="input flex-1" placeholder="Group name" value={group.name} onChange={e => updateGroup(ti, gi, { name: e.target.value })} />
-                    <select className="input w-40" value={group.selectionRule} onChange={e => updateGroup(ti, gi, { selectionRule: e.target.value as SelectionRule })}>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    <input className="input flex-1 min-w-[120px]" placeholder="Group name" value={group.name} onChange={e => updateGroup(ti, gi, { name: e.target.value })} />
+                    <select className="input w-36" value={group.selectionRule} onChange={e => updateGroup(ti, gi, { selectionRule: e.target.value as SelectionRule })}>
                       <option value="ALL">All included</option>
                       <option value="CHOOSE_ONE">Choose one</option>
                       <option value="CHOOSE_N">Choose N</option>
@@ -184,7 +184,7 @@ function ConfigurablePlanBuilder({ products, initialPlan, planId }: { products: 
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div><label className="label">Plan Name *</label><input className="input" value={name} onChange={e => setName(e.target.value)} /></div>
         <div><label className="label">Description</label><input className="input" value={description} onChange={e => setDescription(e.target.value)} /></div>
       </div>
@@ -265,7 +265,7 @@ export default function PlanBuilder() {
   }
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-4 sm:p-8 max-w-4xl">
       <button onClick={() => navigate('/vendor/plans')} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6">
         <ChevronLeft size={16} /> Back to Plans
       </button>
@@ -274,7 +274,7 @@ export default function PlanBuilder() {
       {!isEdit && (
         <div className="card mb-6">
           <h2 className="font-semibold mb-3">Plan Type</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {(['FIXED', 'CONFIGURABLE'] as PlanType[]).map(t => (
               <label key={t} className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${planType === t ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'}`}>
                 <input type="radio" name="planType" value={t} checked={planType === t} onChange={() => setPlanType(t)} className="sr-only" />

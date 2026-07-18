@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useParams, Link } from 'react-router-dom'
 import { customerApi } from '../../lib/api'
-import { useVendorSlug, usePortalPath } from '../../lib/VendorContext'
+import { usePortalPath } from '../../lib/VendorContext'
 
 export default function CustomerLogin() {
-  const slug = useVendorSlug()
+  const { slug } = useParams<{ slug?: string }>()
   const portalPath = usePortalPath()
   const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', password: '' })
@@ -17,7 +17,7 @@ export default function CustomerLogin() {
     try {
       const { data } = await customerApi.post('/customer/auth/login', form)
       localStorage.setItem('customer_token', data.token)
-      navigate(portalPath('/plans'))
+      navigate(slug ? `/portal/${slug}/plans` : '/plans')
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed')
     } finally { setLoading(false) }
@@ -34,7 +34,7 @@ export default function CustomerLogin() {
           <button type="submit" disabled={loading} className="btn-primary w-full">{loading ? 'Signing in...' : 'Sign In'}</button>
         </form>
         <p className="text-center text-sm text-gray-500 mt-4">
-          No account? <Link to={portalPath('/register')} className="text-primary-600 hover:underline">Register</Link>
+          No account? <Link to={slug ? `/portal/${slug}/register` : '/register'} className="text-primary-600 hover:underline">Register</Link>
         </p>
         <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-500">
           <strong>Demo:</strong> alice@example.com / password123

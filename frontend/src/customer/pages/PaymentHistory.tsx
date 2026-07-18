@@ -13,7 +13,8 @@ export default function PaymentHistory() {
       {isLoading && <p className="text-gray-400">Loading...</p>}
       <div className="card">
         {payments?.length === 0 && <p className="text-center text-gray-400 py-8">No payments yet.</p>}
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto -mx-1">
+        <table className="w-full text-sm min-w-[500px]">
           <thead><tr className="border-b text-gray-500 text-left">
             <th className="pb-2 font-medium">Vendor</th><th className="pb-2 font-medium">Plan</th>
             <th className="pb-2 font-medium">Period</th><th className="pb-2 font-medium">Amount</th>
@@ -32,6 +33,7 @@ export default function PaymentHistory() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

@@ -89,7 +89,7 @@ export default function Team() {
   })
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Team</h1>
@@ -102,7 +102,8 @@ export default function Team() {
 
       <div className="card">
         {isLoading && <p className="text-gray-400">Loading...</p>}
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto -mx-1">
+        <table className="w-full text-sm min-w-[480px]">
           <thead>
             <tr className="border-b text-gray-500 text-left">
               <th className="pb-2 font-medium">Name</th>
@@ -135,6 +136,7 @@ export default function Team() {
             ))}
           </tbody>
         </table>
+        </div>
         {data?.length === 0 && (
           <p className="text-center text-gray-400 py-8">No team members yet. Add your first member above.</p>
         )}

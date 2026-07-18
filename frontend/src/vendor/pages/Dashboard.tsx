@@ -23,9 +23,9 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="card flex items-center gap-4">
             <div className={`p-3 rounded-lg ${color}`}><Icon size={22} /></div>
@@ -48,7 +48,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div className="card">
           <h2 className="font-semibold mb-4">Top Plans</h2>
           {data?.topPlans?.length === 0 && <p className="text-gray-400 text-sm">No subscriptions yet.</p>}

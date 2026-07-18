@@ -38,17 +38,17 @@ export default function Settings() {
   })
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 sm:p-8 space-y-8">
       <h1 className="text-2xl font-bold">Settings</h1>
 
       {/* Custom Domain */}
-      <div className="card max-w-lg">
+      <div className="card w-full max-w-lg">
         <h2 className="font-semibold mb-2">Custom Domain</h2>
         <p className="text-sm text-gray-500 mb-4">
           Point your domain's DNS CNAME to this app's hostname, then enter the domain below.
           Customers visiting that domain will see your portal directly without the <code className="bg-gray-100 px-1 rounded">/portal/slug</code> prefix.
         </p>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             className="input flex-1"
             placeholder="e.g. portal.yourbusiness.com"
@@ -80,7 +80,7 @@ export default function Settings() {
       </div>
 
       {/* Stripe Keys */}
-      <div className="card max-w-lg">
+      <div className="card w-full max-w-lg">
         <h2 className="font-semibold mb-2">Stripe Integration</h2>
         <p className="text-sm text-gray-500 mb-4">
           Enter your own Stripe keys so payments go directly to your Stripe account.

@@ -70,7 +70,8 @@ export default function Customers() {
       </div>
 
       <div className="bg-white border rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]">
           <thead><tr className="border-b text-gray-500 text-left bg-gray-50">
             <th className="px-4 py-3 font-medium">Name</th>
             <th className="px-4 py-3 font-medium">Email</th>
@@ -105,6 +106,7 @@ export default function Customers() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {resetting && <ResetPasswordModal customer={resetting} onClose={() => setResetting(null)} />}

@@ -22,15 +22,15 @@ export default function BrowsePlans() {
       <div className="grid gap-6">
         {plans?.map((plan: any) => (
           <div key={plan.id} className="card">
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-semibold">{plan.name}</h2>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${plan.planType === 'FIXED' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{plan.planType}</span>
                 </div>
                 {plan.description && <p className="text-gray-500 mt-1">{plan.description}</p>}
               </div>
-              <button className="btn-primary" onClick={() => navigate(portalPath(`/plans/${plan.id}/subscribe`))}>
+              <button className="btn-primary flex-shrink-0" onClick={() => navigate(portalPath(`/plans/${plan.id}/subscribe`))}>
                 Subscribe
               </button>
             </div>

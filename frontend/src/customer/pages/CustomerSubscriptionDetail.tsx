@@ -41,7 +41,7 @@ export default function CustomerSubscriptionDetail() {
       <button onClick={() => navigate(portalPath('/subscriptions'))} className="flex items-center gap-2 text-sm text-gray-500 mb-6"><ChevronLeft size={16} /> Back</button>
       <h1 className="text-2xl font-bold mb-6">{sub.plan?.name}</h1>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div className="card">
           <div className="text-sm text-gray-500">Status</div>
           <div className="mt-1"><span className={`badge-${sub.status?.toLowerCase()}`}>{sub.status}</span></div>

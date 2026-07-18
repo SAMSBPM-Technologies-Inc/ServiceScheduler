@@ -22,7 +22,7 @@ export default function Plans() {
   })
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Plans</h1>
         {admin && (
@@ -45,7 +45,7 @@ export default function Plans() {
                 {plan.description && <p className="text-sm text-gray-500 mt-1">{plan.description}</p>}
                 <div className="text-xs text-gray-400 mt-1">{plan._count?.subscriptions || 0} subscriptions</div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                 {admin && (
                   <button onClick={() => navigate(`/vendor/plans/${plan.id}/edit`)} className="text-gray-400 hover:text-primary-600" title="Edit plan">
                     <Edit2 size={16} />

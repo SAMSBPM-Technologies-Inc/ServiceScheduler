@@ -166,7 +166,7 @@ export default function SubscribePlan() {
                   <span className="text-xs text-gray-400">{cp.product?.category}</span>
                 </label>
                 {ts && (
-                  <div className="ml-6 grid grid-cols-3 gap-2">
+                  <div className="ml-6 grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {cp.allowedTiers?.map((tier: string) => {
                       const price = (cp.pricePerTier as Record<string, number>)?.[tier] || 0
                       return (
